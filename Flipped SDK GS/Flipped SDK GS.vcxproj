@@ -118,7 +118,7 @@
       <SubSystem>Windows</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <EnableUAC>false</EnableUAC>
-      <AdditionalDependencies>minhook.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
@@ -130,8 +130,11 @@
       <PreprocessorDefinitions>NDEBUG;FLIPPEDSDKGS_EXPORTS;_WINDOWS;_USRDLL;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
-      <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
+      <PrecompiledHeaderFile>
+      </PrecompiledHeaderFile>
       <LanguageStandard>stdcpplatest</LanguageStandard>
+      <AdditionalIncludeDirectories>
+      </AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -139,24 +142,32 @@
       <OptimizeReferences>true</OptimizeReferences>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <EnableUAC>false</EnableUAC>
-      <AdditionalDependencies>minhook.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>
+      </AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClInclude Include="framework.h" />
-    <ClInclude Include="Hooks.h" />
-    <ClInclude Include="MinHook.h" />
+    <ClInclude Include="Core\Inventory.h" />
+    <ClInclude Include="Core\Looting.h" />
+    <ClInclude Include="Includes\SDK\PropertyFixup.hpp" />
+    <ClInclude Include="Includes\SDK\SDK.hpp" />
+    <ClInclude Include="Includes\SDK\UnrealContainers.hpp" />
+    <ClInclude Include="Includes\SDK\UtfN.hpp" />
+    <ClInclude Include="Other\Memory.h" />
+    <ClInclude Include="Other\Framework.h" />
+    <ClInclude Include="Core\Hooks.h" />
+    <ClInclude Include="Includes\MinHook\MinHook.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="dllmain.cpp" />
-    <ClCompile Include="SDK\SDK\Basic.cpp" />
-    <ClCompile Include="SDK\SDK\CoreUObject_functions.cpp" />
-    <ClCompile Include="SDK\SDK\Engine_functions.cpp" />
-    <ClCompile Include="SDK\SDK\FortniteGame_functions.cpp" />
-    <ClCompile Include="SDK\SDK\GameplayAbilities_functions.cpp" />
+    <ClCompile Include="Includes\SDK\SDK\Basic.cpp" />
+    <ClCompile Include="Includes\SDK\SDK\CoreUObject_functions.cpp" />
+    <ClCompile Include="Includes\SDK\SDK\Engine_functions.cpp" />
+    <ClCompile Include="Includes\SDK\SDK\FortniteGame_functions.cpp" />
+    <ClCompile Include="Includes\SDK\SDK\GameplayAbilities_functions.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <Library Include="minhook.lib" />
+    <None Include="Includes\SDK\NameCollisions.inl" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

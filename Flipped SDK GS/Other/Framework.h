@@ -1,0 +1,157 @@
+#pragma once
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
+#include <iostream>
+#include <fstream>
+#include <vector>
+#include <random>
+#include <thread>
+#include "../Includes/SDK/SDK.hpp"
+using namespace SDK;
+#include "../Includes/MinHook/MinHook.h"
+#include "Memory.h"
+
+// ts looks like a magma gs with this many random shit in here! :skull:
+
+#define FLIPPED_LOG(Message) std::cout << "[" << __FUNCTION__ << "]: " << Message << "\n";
+#define SET_TITLE(NewTitle) SetConsoleTitleA((std::string(NewTitle) + " | Compiled at " + __TIME__).c_str())
+
+#define DEFINE_INDEX(Idx) (uint32_t)Idx
+#define DEFINE_OG(OG) (void**)&OG
+
+static FName NAME_GameNetDriver = UKismetStringLibrary::Conv_StringToName(L"GameNetDriver");
+
+enum EHookType
+{
+	Normal,
+	Virtual
+};
+
+static int ReturnTrue() { return true; }
+static void ReturnHook() { return; }
+
+__forceinline UEngine* GetEngine() { return UEngine::GetEngine(); }
+__forceinline UWorld* GetWorld() { return GetEngine()->GameViewport->World; }
+
+namespace Util
+{
+	template <typename T>
+	__forceinline T* Cast(UObject* Object)
+	{
+		if (Object && Object->IsA(T::StaticClass()))
+			return reinterpret_cast<T*>(Object);
+
+		return nullptr;
+	}
+
+	class FHookBase
+	{
+	public:
+		static bool Initialize()
+		{
+			return (MH_Initialize() == MH_OK);
+		}
+	};
+
+	template <typename UEClass = UObject> // if it works we dont change it head ass code right here!
+	struct FHook : public FHookBase
+	{
+	private:
+		void* Detour = nullptr;
+		void** VTable = nullptr;
+		uint32_t Index = 0;
+		uint64_t Address = 0;
+		EHookType Type = Normal;
+		void** OG = nullptr;
+		std::string HookName;
+
+		void VirtualHookInternal(void** _VTable, uint32_t _Index, void* _Detour, void** _OG = nullptr)
+		{
+			if (_VTable && _Detour)
+			{
+				DWORD oldProtect;
+				VirtualProtect(&_VTable[_Index], sizeof(void*), 0x40, &oldProtect);
+				if (_OG)
+					*_OG = _VTable[_Index];
+
+				_VTable[_Index] = Detour;
+				VirtualProtect(&_VTable[_Index], sizeof(void*), oldProtect, &oldProtect);
+			}
+		}
+
+		void HookInternal(uint64_t _Address, void* _Detour, void** _OG = nullptr)
+		{
+			MH_CreateHook((LPVOID)_Address, _Detour, _OG);
+			MH_EnableHook((LPVOID)_Address);
+		}
+
+	public:
+		FHook(std::string _HookName, uint32_t _Index, void* _Detour, void** _OG = nullptr)
+		{
+			HookName = _HookName;
+			VTable = UEClass::GetDefaultObj()->VTable;
+			Index = _Index;
+			Detour = _Detour;
+			OG = _OG;
+			Type = Virtual;
+
+			VirtualHookInternal(VTable, Index, Detour, OG);
+		}
+
+		FHook(std::string _HookName, uint64_t _Address, void* _Detour, void** _OG = nullptr)
+		{
+			HookName = _HookName;
+			Address = Addresses::ImageBase + _Address;
+			Detour = _Detour;
+			OG = _OG;
+			Type = Normal;
+
+			HookInternal(Address, Detour, OG);
+		}
+	};
+}
+
+namespace Misc
+{
+	template <typename T>
+	__forceinline T* SpawnActor(const FVector& Location = {}, const FRotator& Rotation = {}, AActor* Owner = nullptr, UClass* Class = T::StaticClass())
+	{
+		if (!Class)
+		{
+			FLIPPED_LOG("Invalid class when trying to spawn actor!");
+			return nullptr;
+		}
+
+		FTransform NewTransform;
+		NewTransform.Translation = Location;
+		NewTransform.Rotation = UKismetMathLibrary::Conv_RotatorToQuaternion(Rotation); // I LOVE UE5!!!!
+		NewTransform.Scale3D = FVector(1, 1, 1);
+
+		AActor* NewActor = UGameplayStatics::BeginDeferredActorSpawnFromClass(GetWorld(), Class, NewTransform, ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn, Owner);
+		if (!NewActor)
+			return nullptr;
+
+		AActor* FinishingNewActor = UGameplayStatics::FinishSpawningActor(NewActor, NewTransform);
+		if (!FinishingNewActor)
+			return nullptr;
+
+		return Util::Cast<T>(FinishingNewActor);
+	}
+
+	float RandRange(float min, float max) {
+		static std::random_device rd;
+		static std::mt19937 gen(rd());
+		std::uniform_real_distribution<float> dist(min, max);
+
+		return dist(gen);
+	}
+
+	FVector GetRandomLocationInCircle(const FVector& Center, float Radius) {
+		float angle = RandRange(0.0f, 2.0f * 3.14159265f);
+		float distance = sqrtf(RandRange(0.0f, 1.0f)) * Radius;
+		float x = cosf(angle) * distance;
+		float y = sinf(angle) * distance;
+
+		return Center + FVector(x, y, 0.0f);
+	}
+}

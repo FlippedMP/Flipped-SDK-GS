@@ -1,26 +1,47 @@
-#include "framework.h"
-#include "Hooks.h"
+#include "Other/Framework.h"
+#include "Core/Hooks.h"
 
 DWORD WINAPI Main(LPVOID)
 {
     AllocConsole();
     FILE* File = nullptr;
     freopen_s(&File, "CONOUT$", "w+", stdout);
-    MH_Initialize();
+    SET_TITLE("Flipped 19.10 - Initializing...");
     Sleep(5000);
 
-    *(bool*)(ImageBase + Addresses::GIsClient) = false;
-    *(bool*)(ImageBase + Addresses::GIsServer) = true;
-    Hook(ImageBase + Addresses::GetNetMode, ReturnTrue);
-    Hook(ImageBase + Addresses::ReadyToStartMatch, ReadyToStartMatch);
-    Hook(ImageBase + Addresses::SpawnDefaultPawnFor, SpawnDefaultPawnFor);
-    Hook(ImageBase + Addresses::ActorNetMode, ReturnTrue);
-    Hook(ImageBase + Addresses::KickPlayer, ReturnTrue);
-    Hook(ImageBase + Addresses::ChangeGameSessionId, ReturnHook);
-    Hook(ImageBase + Addresses::TickFlush, TickFlushHook, (void**)&TickFlush);
+    *(bool*)(Addresses::GIsClient) = false;
+    *(bool*)(Addresses::GIsServer) = true;
 
-    UKismetSystemLibrary::ExecuteConsoleCommand(UWorld::GetWorld(), L"open Artemis_Terrain", nullptr);
-    UWorld::GetWorld()->OwningGameInstance->LocalPlayers.Remove(0);
+    Util::FHookBase::Initialize();
+
+#pragma region Misc
+    Util::FHook("AGameSession::KickPlayer", Addresses::GameSessionKickPlayer, ReturnTrue);
+    Util::FHook("UNetDriver::TickFlush", Addresses::TickFlush, TickFlush, DEFINE_OG(TickFlushOG));
+    Util::FHook("DispatchRequest", Addresses::DispatchRequest, DispatchRequest, DEFINE_OG(DispatchRequestOG));
+
+    Util::FHook("UWorld::GetNetMode", Addresses::WorldGetNetMode, ReturnTrue);
+    Util::FHook("AActor::GetNetMode", Addresses::ActorGetNetMode, ReturnTrue);
+
+    int NullCount = 0; // i refuse to use c style loops for this nigga
+    for (uint64_t Address : Addresses::NullFunctions)
+    {
+        NullCount++;
+        Util::FHook("Null Function " + std::to_string(NullCount), Address, ReturnHook);
+    }
+#pragma endregion
+
+#pragma region FortGameModeAthena
+    Util::FHook("AFortGameModeAthena::ReadyToStartMatch", Addresses::ReadyToStartMatch, ReadyToStartMatch);
+    Util::FHook("AFortGameModeAthena::SpawnDefaultPawnFor", Addresses::SpawnDefaultPawnFor, SpawnDefaultPawnFor);
+#pragma endregion
+
+#pragma region FortPlayerControllerAthena
+    Util::FHook<AFortPlayerControllerAthena>("AFortPlayerControllerAthena::ServerExecuteInventoryItem", Addresses::ServerExecuteInventoryItemVFT, ServerExecuteInventoryItem);
+    Util::FHook("AFortPlayerControllerAthena::ServerAcknowledgePossession", Addresses::ServerAcknowledgePossession, ServerAcknowledgePossession);
+#pragma endregion
+
+    UKismetSystemLibrary::ExecuteConsoleCommand(GetWorld(), L"open Artemis_Terrain", nullptr);
+    GetWorld()->OwningGameInstance->LocalPlayers.Remove(0);
     return 0;
 }
 
