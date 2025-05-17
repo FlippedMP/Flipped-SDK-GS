@@ -81,6 +81,8 @@ bool ReadyToStartMatch(AFortGameModeAthena* thisPtr)
 			thisPtr->bWorldIsReady = true;
 			SET_TITLE("Flipped 19.10 - Listening!");
 		}
+
+
 	}
 
 	return thisPtr->NumPlayers >= thisPtr->WarmupRequiredPlayerCount;
@@ -92,11 +94,38 @@ APawn* SpawnDefaultPawnFor(AFortGameModeAthena* thisPtr, AFortPlayerControllerAt
 		thisPtr->SpawnDefaultPawnAtTransform(NewPlayer, StartSpot->GetTransform())
 	);
 
+	AFortGameModeAthena* GameMode = Util::Cast<AFortGameModeAthena>(GetWorld()->AuthorityGameMode);
+
+	for (FItemAndCount& _ : GameMode->StartingItems)
+	{
+		if (!_.Item || _.Count == 0 || _.Item->GetName().contains("Smart"))
+			continue;
+
+		Inventory::AddItem(NewPlayer, _.Item, _.Count);
+	}
+
+
+	if (FFortAthenaLoadout* CosmeticLoadoutPC = &NewPlayer->CosmeticLoadoutPC)
+	{
+		if (CosmeticLoadoutPC->Pickaxe)
+		{
+			Inventory::AddItem(NewPlayer, CosmeticLoadoutPC->Pickaxe->WeaponDefinition, 1);
+		}
+		else
+		{
+			FLIPPED_LOG("Failed to get pickaxe!");
+		}
+	}
+
+
+
 	if (!NewPawn)
 	{
 		FLIPPED_LOG("Failed to spawn in new pawn!");
 		return nullptr;
 	}
+
+
 
 	return NewPawn;
 }
@@ -105,51 +134,46 @@ void ServerAcknowledgePossession(AFortPlayerControllerAthena* Controller, AFortP
 {
 	Controller->AcknowledgedPawn = P;
 
-	AFortGameModeAthena* GameMode = Util::Cast<AFortGameModeAthena>(GetWorld()->AuthorityGameMode);
-	for (FItemAndCount& _ : GameMode->StartingItems)
-	{
-		if (!_.Item || _.Count == 0)
-			continue;
+	void* InterfaceAddress = Native::GetInterfaceAddress(P, IAbilitySystemInterface::StaticClass());
 
-		Inventory::AddItem(Controller, _.Item, _.Count);
+	if (!InterfaceAddress)
+	{
+		std::cout << "Interface: " << InterfaceAddress << std::endl;
 	}
 
-	P->ServerChoosePart(EFortCustomPartType::Head,
-		Native::FindObject<UCustomCharacterPart>("/Game/Characters/CharacterParts/Female/Medium/Heads/F_Med_Head1.F_Med_Head1"));
+	TScriptInterface<IAbilitySystemInterface> Script;
+	Script.ObjectPointer = P;
+	Script.InterfacePointer = InterfaceAddress;
 
-	P->ServerChoosePart(EFortCustomPartType::Body,
-		Native::FindObject<UCustomCharacterPart>("/Game/Characters/CharacterParts/Female/Medium/Bodies/F_Med_Soldier_01.F_Med_Soldier_01"));
+	auto GAS = UObject::FindObject<UFortAbilitySet>("FortAbilitySet GAS_AthenaPlayer.GAS_AthenaPlayer");
 
-	P->ServerChoosePart(EFortCustomPartType::Backpack,
-		Native::FindObject<UCustomCharacterPart>("/Game/Characters/CharacterParts/Backpacks/NoBackpack.NoBackpack"));
-
-
-	if (FFortAthenaLoadout* CosmeticLoadoutPC = &Controller->CosmeticLoadoutPC)
+	if (!GAS)
 	{
-		if (CosmeticLoadoutPC->Pickaxe)
-		{
-			Inventory::AddItem(Controller, CosmeticLoadoutPC->Pickaxe->WeaponDefinition, 1);
-		}
-		else
-		{
-			FLIPPED_LOG("Failed to get pickaxe!");
-		}
+		FLIPPED_LOG("No GAS");
 	}
+
+	auto Shit = UFortKismetLibrary::EquipFortAbilitySet(Script, GAS, nullptr);
+
+	std::cout << "Hi: " << Shit.TargetAbilitySystemComponent.ObjectIndex << std::endl;
+
+	Util::Cast<AFortPlayerState>(Controller->PlayerState)->HeroType = Controller->CosmeticLoadoutPC.Character->HeroDefinition;
+	UFortKismetLibrary::UpdatePlayerCustomCharacterPartsVisualization(Util::Cast<AFortPlayerState>(Controller->PlayerState));
 }
 
 void ServerExecuteInventoryItem(AFortPlayerControllerAthena* Controller, const FGuid& ItemGUID)
 {
-	if (!Controller)
+	if (!Controller || Controller->IsInAircraft())
 		return;
 
-	for (UFortWorldItem*& Item : Controller->WorldInventory->Inventory.ItemInstances)
+	for (FFortItemEntry& ItemEntry : Controller->WorldInventory->Inventory.ReplicatedEntries)
 	{
-		if (Item->ItemEntry.ItemGuid == ItemGUID)
+		if (ItemEntry.ItemGuid == ItemGUID)
 		{
+			if (!Controller->MyFortPawn) return;
 			Controller->MyFortPawn->EquipWeaponDefinition(
-				Util::Cast<UFortWeaponItemDefinition>(Item->ItemEntry.ItemDefinition),
+				Util::Cast<UFortWeaponItemDefinition>(ItemEntry.ItemDefinition),
 				ItemGUID,
-				Item->ItemEntry.TrackerGuid,
+				ItemEntry.TrackerGuid,
 				false
 			);
 

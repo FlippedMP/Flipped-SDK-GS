@@ -65,4 +65,6 @@ namespace Native {
 	
 	inline void (*SetWorld)(UNetDriver*, UWorld*)
 		= decltype(SetWorld)(Addresses::ImageBase + Addresses::SetWorld);
+	inline void* (*GetInterfaceAddress)(UObject*, UClass*) 
+		= decltype(GetInterfaceAddress)(Addresses::ImageBase + 0xB1B28C);
 }

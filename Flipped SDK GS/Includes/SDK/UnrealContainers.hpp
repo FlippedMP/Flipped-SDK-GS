@@ -273,7 +273,7 @@ namespace UC
 		{
 			static void* (*FMemoryRealloc)(void* Original, SIZE_T Count, uint32_t Alignment) = nullptr;
 			if (!FMemoryRealloc)
-				FMemoryRealloc = decltype(FMemoryRealloc)(0x1A1927C + (uint64_t)GetModuleHandle(NULL));
+				FMemoryRealloc = decltype(FMemoryRealloc)(0xEB859C + (uint64_t)GetModuleHandle(NULL));
 
 
 			Data = (ArrayElementType*)FMemoryRealloc(Data, (MaxElements = Amount + NumElements) * ElementSize, 0);

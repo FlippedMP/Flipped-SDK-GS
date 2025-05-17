@@ -15,8 +15,9 @@ namespace Inventory
 					Entry.LoadedAmmo = LoadedAmmo;
 
 				Controller->WorldInventory->Inventory.MarkItemDirty(Entry);
-				//Controller->HandleWorldInventoryLocalUpdate();
-				//Controller->WorldInventory->HandleInventoryLocalUpdate();
+				Controller->HandleWorldInventoryLocalUpdate();
+				Controller->WorldInventory->bRequiresLocalUpdate = true;
+				Controller->WorldInventory->HandleInventoryLocalUpdate();
 				return;
 			}
 		}
@@ -48,9 +49,9 @@ namespace Inventory
 				Controller->WorldInventory->Inventory.ItemInstances.Add(Item);
 				Controller->WorldInventory->Inventory.ReplicatedEntries.Add(Item->ItemEntry);
 
+				Controller->WorldInventory->bRequiresLocalUpdate = true;
+				Controller->WorldInventory->HandleInventoryLocalUpdate();
 				Controller->WorldInventory->Inventory.MarkItemDirty(Item->ItemEntry);
-				//Controller->HandleWorldInventoryLocalUpdate();
-				//Controller->WorldInventory->HandleInventoryLocalUpdate();
 
 				return;
 			}

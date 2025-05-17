@@ -67,7 +67,7 @@ namespace Util
 
 		void VirtualHookInternal(void** _VTable, uint32_t _Index, void* _Detour, void** _OG = nullptr)
 		{
-			if (_VTable && _Detour)
+			if (_VTable)
 			{
 				DWORD oldProtect;
 				VirtualProtect(&_VTable[_Index], sizeof(void*), 0x40, &oldProtect);
