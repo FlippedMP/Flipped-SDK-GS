@@ -202,5 +202,6 @@ void ServerTryActivateAbilityWithEventData(UAbilitySystemComponent* thisPtr, con
 	{
 		thisPtr->ClientActivateAbilityFailed(AbilityToActivate, PredictionKey.Current);
 		SelectedAbilitySpec->InputPressed = false;
+		thisPtr->ActivatableAbilities.MarkItemDirty(*SelectedAbilitySpec);
 	}
 }
