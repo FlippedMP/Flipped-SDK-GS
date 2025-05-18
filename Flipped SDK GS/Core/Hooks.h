@@ -3,6 +3,9 @@
 #include "./Inventory.h"
 #include"./Looting.h"
 
+void (*DispatchRequestOG)(__int64, __int64, int); void DispatchRequest(__int64 a1, __int64 a2, int a3) { return DispatchRequestOG(a1, a2, 3); }
+void (*TickFlushOG)(UNetDriver*); void TickFlush(UNetDriver* Driver) { if (Driver && Driver->ReplicationDriver && Driver->ClientConnections.Num() > 0) Native::ServerReplicateActors(Driver->ReplicationDriver); TickFlushOG(Driver); }
+
 bool ReadyToStartMatch(AFortGameModeAthena* thisPtr)
 {
 	if (!thisPtr)
@@ -82,7 +85,6 @@ bool ReadyToStartMatch(AFortGameModeAthena* thisPtr)
 			SET_TITLE("Flipped 19.10 - Listening!");
 		}
 
-
 	}
 
 	return thisPtr->NumPlayers >= thisPtr->WarmupRequiredPlayerCount;
@@ -94,9 +96,13 @@ APawn* SpawnDefaultPawnFor(AFortGameModeAthena* thisPtr, AFortPlayerControllerAt
 		thisPtr->SpawnDefaultPawnAtTransform(NewPlayer, StartSpot->GetTransform())
 	);
 
-	AFortGameModeAthena* GameMode = Util::Cast<AFortGameModeAthena>(GetWorld()->AuthorityGameMode);
+	if (!NewPawn)
+	{
+		FLIPPED_LOG("Failed to spawn in new pawn!");
+		return nullptr;
+	}
 
-	for (FItemAndCount& _ : GameMode->StartingItems)
+	for (FItemAndCount& _ : thisPtr->StartingItems)
 	{
 		if (!_.Item || _.Count == 0 || _.Item->GetName().contains("Smart"))
 			continue;
@@ -104,60 +110,46 @@ APawn* SpawnDefaultPawnFor(AFortGameModeAthena* thisPtr, AFortPlayerControllerAt
 		Inventory::AddItem(NewPlayer, _.Item, _.Count);
 	}
 
-
 	if (FFortAthenaLoadout* CosmeticLoadoutPC = &NewPlayer->CosmeticLoadoutPC)
 	{
 		if (CosmeticLoadoutPC->Pickaxe)
-		{
 			Inventory::AddItem(NewPlayer, CosmeticLoadoutPC->Pickaxe->WeaponDefinition, 1);
-		}
 		else
-		{
 			FLIPPED_LOG("Failed to get pickaxe!");
-		}
 	}
-
-
-
-	if (!NewPawn)
-	{
-		FLIPPED_LOG("Failed to spawn in new pawn!");
-		return nullptr;
-	}
-
-
 
 	return NewPawn;
 }
 
-void ServerAcknowledgePossession(AFortPlayerControllerAthena* Controller, AFortPlayerPawnAthena* P)
+void ServerAcknowledgePossession(AFortPlayerControllerAthena* thisPtr, AFortPlayerPawnAthena* P)
 {
-	Controller->AcknowledgedPawn = P;
+	if (!thisPtr || !P)
+		return;
+
+	thisPtr->AcknowledgedPawn = P;
+
+	AFortPlayerStateAthena* PlayerState = Util::Cast<AFortPlayerStateAthena>(thisPtr->PlayerState);
+	if (!PlayerState)
+		return;
+
+	PlayerState->HeroType = thisPtr->CosmeticLoadoutPC.Character->HeroDefinition;
+	UFortKismetLibrary::UpdatePlayerCustomCharacterPartsVisualization(PlayerState);
 
 	void* InterfaceAddress = Native::GetInterfaceAddress(P, IAbilitySystemInterface::StaticClass());
 
 	if (!InterfaceAddress)
-	{
-		std::cout << "Interface: " << InterfaceAddress << std::endl;
-	}
+		return;
 
 	TScriptInterface<IAbilitySystemInterface> Script;
 	Script.ObjectPointer = P;
 	Script.InterfacePointer = InterfaceAddress;
 
-	auto GAS = UObject::FindObject<UFortAbilitySet>("FortAbilitySet GAS_AthenaPlayer.GAS_AthenaPlayer");
+	UFortAbilitySet* DefaultAbilitySet = UObject::FindObject<UFortAbilitySet>("FortAbilitySet GAS_AthenaPlayer.GAS_AthenaPlayer");
 
-	if (!GAS)
-	{
-		FLIPPED_LOG("No GAS");
-	}
-
-	auto Shit = UFortKismetLibrary::EquipFortAbilitySet(Script, GAS, nullptr);
-
-	std::cout << "Hi: " << Shit.TargetAbilitySystemComponent.ObjectIndex << std::endl;
-
-	Util::Cast<AFortPlayerState>(Controller->PlayerState)->HeroType = Controller->CosmeticLoadoutPC.Character->HeroDefinition;
-	UFortKismetLibrary::UpdatePlayerCustomCharacterPartsVisualization(Util::Cast<AFortPlayerState>(Controller->PlayerState));
+	if (DefaultAbilitySet)
+		UFortKismetLibrary::EquipFortAbilitySet(Script, DefaultAbilitySet, nullptr);
+	else
+		FLIPPED_LOG("Invalid DefaultAbilitySet!");
 }
 
 void ServerExecuteInventoryItem(AFortPlayerControllerAthena* Controller, const FGuid& ItemGUID)
@@ -182,17 +174,33 @@ void ServerExecuteInventoryItem(AFortPlayerControllerAthena* Controller, const F
 	}
 }
 
-void (*DispatchRequestOG)(__int64, __int64, int);
-void DispatchRequest(__int64 a1, __int64 a2, int a3)
+void ServerTryActivateAbilityWithEventData(UAbilitySystemComponent* thisPtr, const FGameplayAbilitySpecHandle& AbilityToActivate, bool InputPressed, const FPredictionKey& PredictionKey, const FGameplayEventData* TriggerEventData)
 {
-	return DispatchRequestOG(a1, a2, 3);
-}
+	if (!thisPtr)
+		return;
 
-void (*TickFlushOG)(UNetDriver*);
-void TickFlush(UNetDriver* Driver)
-{
-	if (Driver && Driver->ReplicationDriver && Driver->ClientConnections.Num() > 0)
-		Native::ServerReplicateActors(Driver->ReplicationDriver);
+	FGameplayAbilitySpec* SelectedAbilitySpec = nullptr;
+	for (FGameplayAbilitySpec& AbilitySpec : thisPtr->ActivatableAbilities.Items)
+	{
+		if (AbilitySpec.Handle.Handle == AbilityToActivate.Handle)
+		{
+			SelectedAbilitySpec = &AbilitySpec;
+			break;
+		}
+	}
 
-	TickFlushOG(Driver);
+	if (!SelectedAbilitySpec)
+	{
+		thisPtr->ClientActivateAbilityFailed(AbilityToActivate, PredictionKey.Current);
+		return;
+	}
+
+	UGameplayAbility* InstancedAbility = nullptr;
+	SelectedAbilitySpec->InputPressed = true;
+
+	if (!Native::InternalTryActivateAbility(thisPtr, AbilityToActivate, PredictionKey, &InstancedAbility, nullptr, TriggerEventData))
+	{
+		thisPtr->ClientActivateAbilityFailed(AbilityToActivate, PredictionKey.Current);
+		SelectedAbilitySpec->InputPressed = false;
+	}
 }

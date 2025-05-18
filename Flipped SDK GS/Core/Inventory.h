@@ -4,6 +4,18 @@
 
 namespace Inventory
 {
+	void UpdateInventory(AFortPlayerControllerAthena* Controller, FFortItemEntry* ItemEntry = nullptr)
+	{
+		if (ItemEntry)
+			Controller->WorldInventory->Inventory.MarkItemDirty(*ItemEntry);
+		else
+			Controller->WorldInventory->Inventory.MarkArrayDirty();
+
+		Controller->HandleWorldInventoryLocalUpdate();
+		Controller->WorldInventory->bRequiresLocalUpdate = true;
+		Controller->WorldInventory->HandleInventoryLocalUpdate();
+	}
+
 	void UpdateEntry(AFortPlayerControllerAthena* Controller, UFortItemDefinition* Definition, int Count, int LoadedAmmo = -1) {
 		for (size_t i = 0; i < Controller->WorldInventory->Inventory.ReplicatedEntries.Num(); i++) {
 			auto& Entry = Controller->WorldInventory->Inventory.ReplicatedEntries[i];
@@ -14,10 +26,7 @@ namespace Inventory
 				if (LoadedAmmo != -1)
 					Entry.LoadedAmmo = LoadedAmmo;
 
-				Controller->WorldInventory->Inventory.MarkItemDirty(Entry);
-				Controller->HandleWorldInventoryLocalUpdate();
-				Controller->WorldInventory->bRequiresLocalUpdate = true;
-				Controller->WorldInventory->HandleInventoryLocalUpdate();
+				UpdateInventory(Controller, &Entry);
 				return;
 			}
 		}
@@ -48,10 +57,7 @@ namespace Inventory
 
 				Controller->WorldInventory->Inventory.ItemInstances.Add(Item);
 				Controller->WorldInventory->Inventory.ReplicatedEntries.Add(Item->ItemEntry);
-
-				Controller->WorldInventory->bRequiresLocalUpdate = true;
-				Controller->WorldInventory->HandleInventoryLocalUpdate();
-				Controller->WorldInventory->Inventory.MarkItemDirty(Item->ItemEntry);
+				UpdateInventory(Controller, &Item->ItemEntry);
 
 				return;
 			}
@@ -110,9 +116,7 @@ namespace Inventory
 					else {
 						Entry.PreviousCount = Entry.Count;
 						Entry.Count -= Count;
-						Controller->WorldInventory->Inventory.MarkItemDirty(Entry);
-						Controller->HandleWorldInventoryLocalUpdate();
-						Controller->WorldInventory->HandleInventoryLocalUpdate();
+						UpdateInventory(Controller, &Entry);
 					}
 				}
 			}
@@ -136,10 +140,8 @@ namespace Inventory
 	{
 		TArray<UFortWorldItem*>& Items = Controller->WorldInventory->Inventory.ItemInstances;
 		for (UFortWorldItem*& Item : Items)
-		{
 			if (Item->ItemEntry.ItemGuid == GUID)
 				return Item;
-		}
 
 		return nullptr;
 	}

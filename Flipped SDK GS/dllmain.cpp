@@ -40,6 +40,12 @@ DWORD WINAPI Main(LPVOID)
     Util::FHook("AFortPlayerControllerAthena::ServerAcknowledgePossession", Addresses::ServerAcknowledgePossession, ServerAcknowledgePossession);
 #pragma endregion
 
+#pragma region AbilitySystemComponent
+    Util::FHook<UAbilitySystemComponent>("UAbilitySystemComponent::ServerTryActivateAbilityWithEventData", Addresses::ServerTryActivateAbilityWithEventDataVFT, ServerTryActivateAbilityWithEventData);
+    Util::FHook<UFortAbilitySystemComponent>("UFortAbilitySystemComponent::ServerTryActivateAbilityWithEventData", Addresses::ServerTryActivateAbilityWithEventDataVFT, ServerTryActivateAbilityWithEventData);
+    Util::FHook<UFortAbilitySystemComponentAthena>("UFortAbilitySystemComponentAthena::ServerTryActivateAbilityWithEventData", Addresses::ServerTryActivateAbilityWithEventDataVFT, ServerTryActivateAbilityWithEventData);
+#pragma endregion
+
     UKismetSystemLibrary::ExecuteConsoleCommand(GetWorld(), L"open Artemis_Terrain", nullptr);
     UKismetSystemLibrary::ExecuteConsoleCommand(GetWorld(), L"log LogFortUIDirector", nullptr);
     GetWorld()->OwningGameInstance->LocalPlayers.Remove(0);
