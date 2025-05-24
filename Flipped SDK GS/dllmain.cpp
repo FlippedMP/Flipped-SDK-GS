@@ -48,6 +48,7 @@ DWORD WINAPI Main(LPVOID)
 
     UKismetSystemLibrary::ExecuteConsoleCommand(GetWorld(), L"open Artemis_Terrain", nullptr);
     UKismetSystemLibrary::ExecuteConsoleCommand(GetWorld(), L"log LogFortUIDirector", nullptr);
+    UKismetSystemLibrary::ExecuteConsoleCommand(GetWorld(), L"log LogQos", nullptr);
     GetWorld()->OwningGameInstance->LocalPlayers.Remove(0);
     return 0;
 }

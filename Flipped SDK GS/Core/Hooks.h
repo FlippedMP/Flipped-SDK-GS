@@ -32,6 +32,9 @@ bool ReadyToStartMatch(AFortGameModeAthena* thisPtr)
 			thisPtr->CurrentPlaylistId = Playlist->PlaylistId;
 			thisPtr->CurrentPlaylistName = Playlist->PlaylistName;
 			thisPtr->WarmupRequiredPlayerCount = 1;
+
+			static FName SafeZoneDamageRowName = UKismetStringLibrary::Conv_StringToName(L"Default.SafeZone.Damage");
+			GameState->AthenaGameDataResetRows.Add(SafeZoneDamageRowName);
 		}
 	}
 
@@ -79,9 +82,22 @@ bool ReadyToStartMatch(AFortGameModeAthena* thisPtr)
 			Native::SetWorld(GetWorld()->NetDriver, GetWorld());
 
 			for (FLevelCollection& LevelCollection : GetWorld()->LevelCollections)
-				LevelCollection.NetDriver = GetWorld()->NetDriver;
+				LevelCollection.NetDriver = GetWorld()->NetDriver;			
 
 			thisPtr->bWorldIsReady = true;
+
+			for (auto& SupportedAthenaLootTierGroup : thisPtr->SupportedAthenaLootTierGroups) {
+				FLIPPED_LOG("SupportedAthenaLootTierGroups: " + SupportedAthenaLootTierGroup.ToString());
+			}
+
+			for (auto& [SupportTierGroup, Redirect] : thisPtr->RedirectAthenaLootTierGroups) {
+				FLIPPED_LOG(SupportTierGroup.ToString());
+				FLIPPED_LOG(Redirect.ToString());
+			}
+
+			GameState->DefaultRebootMachineHotfix = 1;
+
+
 			SET_TITLE("Flipped 19.10 - Listening!");
 		}
 
@@ -117,6 +133,41 @@ APawn* SpawnDefaultPawnFor(AFortGameModeAthena* thisPtr, AFortPlayerControllerAt
 		else
 			FLIPPED_LOG("Failed to get pickaxe!");
 	}
+
+	static bool bFirst = false;
+	
+	if (!bFirst) {
+		UCurveTable* AthenaGameDataTable = Util::Cast<AFortGameStateAthena>(thisPtr->GameState)->AthenaGameDataTable;
+		if (AthenaGameDataTable) {
+
+			auto& RowMap = AthenaGameDataTable->GetRowMap();
+			for (auto& RowPair : RowMap) {
+				FName RowName = RowPair.First;
+				FSimpleCurve* Curve = reinterpret_cast<FSimpleCurve*>(RowPair.Second);
+
+				if (RowName.ToString() == "Default.SafeZone.Damage") {
+					FLIPPED_LOG("Apply SafeZoneDamage");
+					for (auto& Key : Curve->Keys)
+					{
+						FSimpleCurveKey* KeyPtr = &Key;
+						KeyPtr->Value = 0.f;
+					}
+
+					Curve->Keys.Add(FSimpleCurveKey(1.f, 0.01f));
+				}
+			}
+		}
+		else {
+			FLIPPED_LOG("no AthenaGameDataTable");
+		}
+
+		static UDataTable* AthenaRangedWeapons = UObject::FindObject<UDataTable>("DataTable AthenaRangedWeapons.AthenaRangedWeapons");
+		Misc::ApplyDataTablePatch(AthenaRangedWeapons);
+
+		bFirst = true;
+	}
+
+	
 
 	return NewPawn;
 }
@@ -174,7 +225,7 @@ void ServerExecuteInventoryItem(AFortPlayerControllerAthena* Controller, const F
 	}
 }
 
-void ServerTryActivateAbilityWithEventData(UAbilitySystemComponent* thisPtr, const FGameplayAbilitySpecHandle& AbilityToActivate, bool InputPressed, const FPredictionKey& PredictionKey, const FGameplayEventData* TriggerEventData)
+void ServerTryActivateAbilityWithEventData(UAbilitySystemComponent* thisPtr, FGameplayAbilitySpecHandle AbilityToActivate, bool InputPressed, const FPredictionKey& PredictionKey, const FGameplayEventData* TriggerEventData)
 {
 	if (!thisPtr)
 		return;

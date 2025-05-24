@@ -19,8 +19,8 @@ namespace Addresses {
 	const inline uint64_t GameSessionKickPlayer = 0x78857F4;
 	const inline uint64_t DispatchRequest = 0x1674270;
 
-	const inline uint64_t StaticFindObject = 0x38BFC10;
-	const inline uint64_t StaticLoadObject = 0x38C1A30;
+	const inline uint64_t StaticFindObject = 0xbc9b40;
+	const inline uint64_t StaticLoadObject = 0x10a6fb8;
 	const inline uint64_t GetWorldContextFromObject = 0xBA3014;
 	const inline uint64_t CreateNetDriver_Local = 0x159AD28;
 	const inline uint64_t InitListen = 0x515058C;
@@ -45,11 +45,10 @@ namespace Native {
 	template <typename T>
 	inline T* FindObject(std::string ObjectPath)
 	{
-		UClass* _UObjectClass = StaticClassImpl<"Object">(); // cause uobject doesnt have a get def obj func!
 
-		T* _ = (T*)StaticFindObject_(_UObjectClass, nullptr, std::wstring(ObjectPath.begin(), ObjectPath.end()).c_str(), false);
+		T* _ = (T*)StaticFindObject_(T::StaticClass(), nullptr, std::wstring(ObjectPath.begin(), ObjectPath.end()).c_str(), false);
 		if (!_)
-			return (T*)StaticLoadObject_(_UObjectClass, nullptr, std::wstring(ObjectPath.begin(), ObjectPath.end()).c_str(), nullptr, 0, nullptr, false);
+			return (T*)StaticLoadObject_(T::StaticClass(), nullptr, std::wstring(ObjectPath.begin(), ObjectPath.end()).c_str(), nullptr, 0, nullptr, false);
 
 		return nullptr;
 	}

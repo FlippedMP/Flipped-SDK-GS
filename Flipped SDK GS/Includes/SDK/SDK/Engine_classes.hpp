@@ -11465,6 +11465,12 @@ public:
 	uint8                                         Pad_28[0x78];                                      // 0x0028(0x0078)(Fixing Struct Size After Last Property [ Dumper-7 ])
 
 public:
+	const TMap<FName, uint8*>& GetRowMap() const
+	{
+		return *reinterpret_cast<TMap<FName, uint8*>*>(__int64(this) + 0x30);
+	}
+public:
+
 	static class UClass* StaticClass()
 	{
 		return StaticClassImpl<"CurveTable">();

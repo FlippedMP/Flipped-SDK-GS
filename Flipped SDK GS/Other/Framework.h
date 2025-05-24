@@ -154,4 +154,27 @@ namespace Misc
 
 		return Center + FVector(x, y, 0.0f);
 	}
+
+	UCurveTable* GetGameData() {
+		return Native::FindObject<UCurveTable>("/Game/Athena/Balance/DataTables/AthenaGameData.AthenaGameData");
+	}
+
+	void ApplyDataTablePatch(UDataTable* DataTable) {
+		if (!DataTable) return;
+		TArray<AActor*> Actors;
+		UGameplayStatics::GetAllActorsOfClass(UWorld::GetWorld(), UFortWeaponRangedItemDefinition::StaticClass(), &Actors);
+		for (AActor* Actor : Actors) {
+			UFortWeaponRangedItemDefinition* RangedItemDefinition = reinterpret_cast<UFortWeaponRangedItemDefinition*>(Actor);
+			if (RangedItemDefinition) {
+				FFortRangedWeaponStats WeaponStats;
+				UDataTableFunctionLibrary::GetDataTableRowFromName(DataTable, RangedItemDefinition->GetWeaponStatHandle().RowName, &WeaponStats);
+				WeaponStats.KnockbackMagnitude = 0.0;
+				WeaponStats.MidRangeKnockbackMagnitude = 0.0;
+				WeaponStats.LongRangeKnockbackMagnitude = 0.0;
+				WeaponStats.KnockbackZAngle = 0.0;
+			}
+		}
+
+		Actors.Free();
+	}
 }
