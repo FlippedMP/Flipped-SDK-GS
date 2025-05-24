@@ -10,7 +10,7 @@ namespace Addresses {
 	const inline uint64_t SpawnDefaultPawnFor = 0x5FA1F18;
 	const inline uint64_t ServerAcknowledgePossession = 0x799F6C8;
 	const inline uint32_t ServerExecuteInventoryItemVFT = 0x22C;
-	const inline uint32_t ServerTryActivateAbilityWithEventDataVFT = 0x0;
+	const inline uint32_t ServerTryActivateAbilityWithEventDataVFT = 0x108;
 
 	const inline uint64_t GetMaxTickRate = 0xAED938;
 	const inline uint64_t TickFlush = 0xBC72C0;
@@ -45,7 +45,7 @@ namespace Native {
 	template <typename T>
 	inline T* FindObject(std::string ObjectPath)
 	{
-		UClass* _UObjectClass = StaticClassImpl<"Object">();
+		UClass* _UObjectClass = StaticClassImpl<"Object">(); // cause uobject doesnt have a get def obj func!
 
 		T* _ = (T*)StaticFindObject_(_UObjectClass, nullptr, std::wstring(ObjectPath.begin(), ObjectPath.end()).c_str(), false);
 		if (!_)
