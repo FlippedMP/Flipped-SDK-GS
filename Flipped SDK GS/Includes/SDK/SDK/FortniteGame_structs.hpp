@@ -27843,7 +27843,19 @@ public:
 	struct FScalableFloat                         PlayerCapSolo;                                     // 0x0168(0x0028)(Edit, Protected, NativeAccessSpecifierProtected)
 	struct FScalableFloat                         PlayerCapDuo;                                      // 0x0190(0x0028)(Edit, Protected, NativeAccessSpecifierProtected)
 	struct FScalableFloat                         PlayerCapSquad;                                    // 0x01B8(0x0028)(Edit, Protected, NativeAccessSpecifierProtected)
-	uint8                                         Pad_1E0[0xB8];                                     // 0x01E0(0x00B8)(Fixing Struct Size After Last Property [ Dumper-7 ])
+	float CachedCurveTableVersion;
+	int CountCached;
+	TArray<float> RadiusChunked;
+	TArray<float> ForceDistanceMinCached;
+	TArray<float> ForceDistanceMaxCached;
+	TArray<float> RejectRadiusCached;
+	TArray<float> RejectOuterDistanceCached;
+	TArray<float> WaitTimeCached;
+	TArray<float> ShrinkTimeCached;
+	TArray<float> MegaStormGridCellThicknessCached;
+	TArray<float> PlayerCapSoloCached;
+	TArray<float> PlayerCapDuoCached;
+	TArray<float> PlayerCapSquadCached;
 };
 
 // ScriptStruct FortniteGame.FortBuddyTagListener

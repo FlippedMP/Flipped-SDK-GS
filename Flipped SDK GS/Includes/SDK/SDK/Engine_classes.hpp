@@ -11469,6 +11469,8 @@ public:
 	{
 		return *reinterpret_cast<TMap<FName, uint8*>*>(__int64(this) + 0x30);
 	}
+
+
 public:
 
 	static class UClass* StaticClass()
@@ -19825,7 +19827,7 @@ public:
 	static bool EqualEqual_PrimaryAssetType(const struct FPrimaryAssetType& A, const struct FPrimaryAssetType& B);
 	static bool EqualEqual_SoftClassReference(const TSoftClassPtr<class UClass>& A, const TSoftClassPtr<class UClass>& B);
 	static bool EqualEqual_SoftObjectReference(const TSoftObjectPtr<class UObject>& A, const TSoftObjectPtr<class UObject>& B);
-	static void ExecuteConsoleCommand(const class UObject* WorldContextObject, const class FString& Command, class APlayerController* SpecificPlayer);
+	static void ExecuteConsoleCommand(const class UObject* WorldContextObject, const class FString& Command, class APlayerController* SpecificPlayer = nullptr);
 	static void FlushDebugStrings(const class UObject* WorldContextObject);
 	static void FlushPersistentDebugLines(const class UObject* WorldContextObject);
 	static void ForceCloseAdBanner();

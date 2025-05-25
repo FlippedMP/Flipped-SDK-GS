@@ -24,7 +24,8 @@ static FName NAME_GameNetDriver = UKismetStringLibrary::Conv_StringToName(L"Game
 enum EHookType
 {
 	Normal,
-	Virtual
+	Virtual,
+	Patch
 };
 
 static int ReturnTrue() { return true; }
@@ -85,6 +86,14 @@ namespace Util
 			MH_EnableHook((LPVOID)_Address);
 		}
 
+		static void Patch(uintptr_t ptr, uint8_t byte)
+		{
+			DWORD og;
+			VirtualProtect(LPVOID(ptr), sizeof(byte), PAGE_EXECUTE_READWRITE, &og);
+			*(uint8_t*)ptr = byte;
+			VirtualProtect(LPVOID(ptr), sizeof(byte), og, &og);
+		}
+
 	public:
 		FHook(std::string _HookName, uint32_t _Index, void* _Detour, void** _OG = nullptr)
 		{
@@ -107,6 +116,14 @@ namespace Util
 			Type = Normal;
 
 			HookInternal(Address, Detour, OG);
+		}
+
+		FHook(std::string _PatchName, uint64_t _Address, uint8_t Byte) {
+			HookName = _PatchName;
+			Type = EHookType::Patch;
+			Address = Addresses::ImageBase + _Address;
+
+			Patch(Address, Byte);
 		}
 	};
 }
@@ -156,7 +173,7 @@ namespace Misc
 	}
 
 	UCurveTable* GetGameData() {
-		return Native::FindObject<UCurveTable>("/Game/Athena/Balance/DataTables/AthenaGameData.AthenaGameData");
+		return Native::StaticFindObject<UCurveTable>("/Game/Athena/Balance/DataTables/AthenaGameData.AthenaGameData");
 	}
 
 	void ApplyDataTablePatch(UDataTable* DataTable) {
@@ -178,3 +195,34 @@ namespace Misc
 		Actors.Free();
 	}
 }
+
+class FFrame
+{
+public:
+	unsigned __int8* MostRecentPropertyAddress() {
+		return *reinterpret_cast<unsigned __int8**>(uint64_t(this) + 0x38);
+	}
+
+	unsigned __int8*& Code() {
+		return *reinterpret_cast<unsigned __int8**>(uint64_t(this) + 0x20);
+	}
+	SDK::FProperty*& PropertyChainForCompiledIn() {
+		return *reinterpret_cast<FProperty**>(uint64_t(this) + 0x80);
+	}
+	SDK::UObject* Object() {
+		return *reinterpret_cast<UObject**>(uint64_t(this) + 0x18);
+	}
+
+
+public:
+
+
+	void Step(SDK::UObject* Context, void* const RESULT_PARAM) {
+		static void (*StepOriginal)(__int64, SDK::UObject*, void* const RESULT_PARAM) = decltype(StepOriginal)(InSDKUtils::GetImageBase() + 0xCCB6B8);
+		StepOriginal(__int64(this), Context, RESULT_PARAM);
+	}
+	void StepExplicitProperty(unsigned __int8* Result, SDK::FProperty* Property) {
+		static void (*StepExplicitPropertyOriginal)(__int64, unsigned __int8*, FProperty*) = decltype(StepExplicitPropertyOriginal)(InSDKUtils::GetImageBase() + 0xCC9C90);
+		StepExplicitPropertyOriginal(__int64(this), Result, Property);
+	}
+};

@@ -11,6 +11,8 @@
 
 // Includes the entire SDK. Include files directly for faster compilation!
 
+
+
 #include "SDK/Basic.hpp"
 #include "SDK/CoreUObject_structs.hpp"
 #include "SDK/CoreUObject_classes.hpp"
@@ -2579,3 +2581,4 @@
 #include "SDK/BP_BattleStarModal_classes.hpp"
 #include "SDK/BPS19_AboutModal_Decorator_classes.hpp"
 #include "SDK/BPS19_AboutModal_classes.hpp"
+

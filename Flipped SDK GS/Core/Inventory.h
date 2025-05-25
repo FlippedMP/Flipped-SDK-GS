@@ -11,7 +11,6 @@ namespace Inventory
 		else
 			Controller->WorldInventory->Inventory.MarkArrayDirty();
 
-		Controller->HandleWorldInventoryLocalUpdate();
 		Controller->WorldInventory->bRequiresLocalUpdate = true;
 		Controller->WorldInventory->HandleInventoryLocalUpdate();
 	}
@@ -134,6 +133,8 @@ namespace Inventory
 				Controller->WorldInventory->Inventory.MarkArrayDirty();
 			}
 		}
+
+		UpdateInventory(Controller);
 	}
 
 	UFortWorldItem* GetItemFromGUID(AFortPlayerControllerAthena* Controller, FGuid GUID)

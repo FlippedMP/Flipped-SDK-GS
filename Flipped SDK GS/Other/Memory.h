@@ -8,9 +8,13 @@ namespace Addresses {
 
 	const inline uint64_t ReadyToStartMatch = 0x5F9CB9C;
 	const inline uint64_t SpawnDefaultPawnFor = 0x5FA1F18;
+	const inline uint64_t StartNewSafeZonePhase = 0x5FA67BC;
+	const inline uint32_t GetGameSessionClassVFT = 0xE3;
 	const inline uint64_t ServerAcknowledgePossession = 0x799F6C8;
 	const inline uint32_t ServerExecuteInventoryItemVFT = 0x22C;
 	const inline uint32_t ServerTryActivateAbilityWithEventDataVFT = 0x108;
+	const inline uint32_t ServerLoadingScreenDroppedVFT = 0x28E;
+
 
 	const inline uint64_t GetMaxTickRate = 0xAED938;
 	const inline uint64_t TickFlush = 0xBC72C0;
@@ -29,6 +33,13 @@ namespace Addresses {
 	const inline uint64_t GetInterfaceAddress = 0xB1B28C;
 	const inline uint64_t InternalTryActivateAbility = 0x4E02108;
 
+	const inline uint64_t OnGamePhaseStepChanged = 0x6A69F80; //AFortAthenaMutator_GiveItemsAtGamePhaseStep
+	
+	const inline uint64_t SpawnAI = 0x69D5510;
+
+	const inline uint64_t GameSessionPatch = 0x65B510F + 1;
+	const inline uint64_t FCommandLineGetCommandLine = 0xB71D9C;
+
 	const inline std::vector<uint64_t> NullFunctions =
 	{
 		0x258D0DC // ChangeGamesessionId
@@ -43,14 +54,15 @@ namespace Native {
 		= decltype(StaticLoadObject_)(Addresses::ImageBase + Addresses::StaticLoadObject);
 	
 	template <typename T>
-	inline T* FindObject(std::string ObjectPath)
+	inline T* StaticFindObject(std::string ObjectPath, UClass* Class = UObject::StaticClass())
 	{
+		return (T*)StaticFindObject_(Class, nullptr, std::wstring(ObjectPath.begin(), ObjectPath.end()).c_str(), false);
+	}
 
-		T* _ = (T*)StaticFindObject_(T::StaticClass(), nullptr, std::wstring(ObjectPath.begin(), ObjectPath.end()).c_str(), false);
-		if (!_)
-			return (T*)StaticLoadObject_(T::StaticClass(), nullptr, std::wstring(ObjectPath.begin(), ObjectPath.end()).c_str(), nullptr, 0, nullptr, false);
-
-		return nullptr;
+	template <typename T>
+	inline T* StaticLoadObject(std::string Path, UClass* InClass = T::StaticClass(), UObject* Outer = nullptr)
+	{
+		return (T*)StaticLoadObject_(InClass, Outer, std::wstring(Path.begin(), Path.end()).c_str(), nullptr, 0, nullptr, false);
 	}
 
 	inline void* (*GetWorldFromContextObject)(UEngine*, UWorld*) =

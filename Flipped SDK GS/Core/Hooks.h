@@ -5,6 +5,9 @@
 
 void (*DispatchRequestOG)(__int64, __int64, int); void DispatchRequest(__int64 a1, __int64 a2, int a3) { return DispatchRequestOG(a1, a2, 3); }
 void (*TickFlushOG)(UNetDriver*); void TickFlush(UNetDriver* Driver) { if (Driver && Driver->ReplicationDriver && Driver->ClientConnections.Num() > 0) Native::ServerReplicateActors(Driver->ReplicationDriver); TickFlushOG(Driver); }
+void (*StartNewSafeZonePhaseOG)(AFortGameModeAthena* GameMode, int32_t NewSafeZonePhase);
+
+
 
 bool ReadyToStartMatch(AFortGameModeAthena* thisPtr)
 {
@@ -24,17 +27,37 @@ bool ReadyToStartMatch(AFortGameModeAthena* thisPtr)
 			GameState->CurrentPlaylistInfo.OverridePlaylist = Playlist;
 			GameState->CurrentPlaylistInfo.PlaylistReplicationKey++;
 			GameState->CurrentPlaylistInfo.MarkArrayDirty();
-			GameState->OnRep_CurrentPlaylistInfo();
 
 			GameState->CurrentPlaylistId = Playlist->PlaylistId;
-			GameState->OnRep_CurrentPlaylistId();
+
 
 			thisPtr->CurrentPlaylistId = Playlist->PlaylistId;
 			thisPtr->CurrentPlaylistName = Playlist->PlaylistName;
 			thisPtr->WarmupRequiredPlayerCount = 1;
 
-			static FName SafeZoneDamageRowName = UKismetStringLibrary::Conv_StringToName(L"Default.SafeZone.Damage");
-			GameState->AthenaGameDataResetRows.Add(SafeZoneDamageRowName);
+			GameState->AirCraftBehavior = Playlist->AirCraftBehavior;
+			GameState->CachedSafeZoneStartUp = Playlist->SafeZoneStartUp;
+
+			Playlist->AISettings->AIServices[1] = UAthenaAIServicePlayerBots::StaticClass();
+			thisPtr->AISettings = Playlist->AISettings;
+
+			for (int i = 0; i < Playlist->AdditionalLevels.Num(); i++) {
+				TSoftObjectPtr<UWorld> World = Playlist->AdditionalLevels[i];
+				FString LevelName = UKismetStringLibrary::Conv_NameToString(World.ObjectID.AssetPathName);
+				ULevelStreamingDynamic::LoadLevelInstance(GetWorld(), LevelName, {}, {}, nullptr, FString(), {});
+				FAdditionalLevelStreamed NewLevel{ World.ObjectID.AssetPathName,false };
+				GameState->AdditionalPlaylistLevelsStreamed.Add(NewLevel);
+			}
+			for (int i = 0; i < Playlist->AdditionalLevelsServerOnly.Num(); i++) {
+				TSoftObjectPtr<UWorld> World = Playlist->AdditionalLevelsServerOnly[i];
+				FString LevelName = UKismetStringLibrary::Conv_NameToString(World.ObjectID.AssetPathName);
+				ULevelStreamingDynamic::LoadLevelInstance(GetWorld(), LevelName, {}, {}, nullptr, FString(), {});
+				FAdditionalLevelStreamed NewLevel{ World.ObjectID.AssetPathName,true };
+				GameState->AdditionalPlaylistLevelsStreamed.Add(NewLevel);
+			}
+			GameState->OnFinishedShowingAdditionalPlaylistLevel();
+			GameState->OnRep_AdditionalPlaylistLevelsStreamed();
+			thisPtr->HandleAllPlaylistLevelsVisible();
 		}
 	}
 
@@ -82,9 +105,13 @@ bool ReadyToStartMatch(AFortGameModeAthena* thisPtr)
 			Native::SetWorld(GetWorld()->NetDriver, GetWorld());
 
 			for (FLevelCollection& LevelCollection : GetWorld()->LevelCollections)
-				LevelCollection.NetDriver = GetWorld()->NetDriver;			
+				LevelCollection.NetDriver = GetWorld()->NetDriver;	
 
+			GameState->OnRep_CurrentPlaylistInfo();
+			GameState->OnRep_CurrentPlaylistId();
 			thisPtr->bWorldIsReady = true;
+
+
 
 			for (auto& SupportedAthenaLootTierGroup : thisPtr->SupportedAthenaLootTierGroups) {
 				FLIPPED_LOG("SupportedAthenaLootTierGroups: " + SupportedAthenaLootTierGroup.ToString());
@@ -93,10 +120,22 @@ bool ReadyToStartMatch(AFortGameModeAthena* thisPtr)
 			for (auto& [SupportTierGroup, Redirect] : thisPtr->RedirectAthenaLootTierGroups) {
 				FLIPPED_LOG(SupportTierGroup.ToString());
 				FLIPPED_LOG(Redirect.ToString());
-			}
+			} /*using this we can determine if TierGroup == SupportTierGroup, Redirect to AthenaTierGroup*/
 
 			GameState->DefaultRebootMachineHotfix = 1;
 
+			if (auto InventoryManager = Util::Cast<UFortGameInstance>(UWorld::GetWorld()->OwningGameInstance)->InventoryManager) {
+				FLIPPED_LOG("Inventory Manager");
+			}
+			else {
+				Util::Cast<UFortGameInstance>(UWorld::GetWorld()->OwningGameInstance)->InventoryManager = 
+					(UFortInventoryManager*)UGameplayStatics::SpawnObject(UFortInventoryManager::StaticClass(), 
+					Util::Cast<UFortGameInstance>(UWorld::GetWorld()->OwningGameInstance));
+				Util::Cast<UFortGameInstance>(UWorld::GetWorld()->OwningGameInstance)->InventoryManager->PersistenceManager = 
+					(UVkPersistenceManager*)UGameplayStatics::SpawnObject(UVkPersistenceManager::StaticClass(), 
+					Util::Cast<UFortGameInstance>(UWorld::GetWorld()->OwningGameInstance)->InventoryManager);
+			} /*So Improper*/
+			//thisPtr->AISettings->AIServices.Add(UAthenaAIServicePlayerBots::StaticClass());
 
 			SET_TITLE("Flipped 19.10 - Listening!");
 		}
@@ -108,6 +147,8 @@ bool ReadyToStartMatch(AFortGameModeAthena* thisPtr)
 
 APawn* SpawnDefaultPawnFor(AFortGameModeAthena* thisPtr, AFortPlayerControllerAthena* NewPlayer, AActor* StartSpot)
 {
+	AFortGameStateAthena* GameState = Util::Cast<AFortGameStateAthena>(thisPtr->GameState);
+
 	AFortPlayerPawnAthena* NewPawn = Util::Cast<AFortPlayerPawnAthena>(
 		thisPtr->SpawnDefaultPawnAtTransform(NewPlayer, StartSpot->GetTransform())
 	);
@@ -150,10 +191,10 @@ APawn* SpawnDefaultPawnFor(AFortGameModeAthena* thisPtr, AFortPlayerControllerAt
 					for (auto& Key : Curve->Keys)
 					{
 						FSimpleCurveKey* KeyPtr = &Key;
-						KeyPtr->Value = 0.f;
+						if (KeyPtr->Time == 0.f) {
+							KeyPtr->Value = 0.f;
+						}
 					}
-
-					Curve->Keys.Add(FSimpleCurveKey(1.f, 0.01f));
 				}
 			}
 		}
@@ -167,9 +208,46 @@ APawn* SpawnDefaultPawnFor(AFortGameModeAthena* thisPtr, AFortPlayerControllerAt
 		bFirst = true;
 	}
 
-	
-
 	return NewPawn;
+}
+
+
+void StartNewSafeZonePhase(AFortGameModeAthena* GameMode, int32_t OverrideSafeZonePhase)
+{
+	AFortGameStateAthena* GameState = Util::Cast<AFortGameStateAthena>(GameMode->GameState);
+	if (!GameState)
+		return StartNewSafeZonePhaseOG(GameMode, OverrideSafeZonePhase);
+
+	static UCurveTable* FortGameData = GameState->AthenaGameDataTable;
+	static FName ShrinkTimeFName = UKismetStringLibrary::Conv_StringToName(L"Default.SafeZone.ShrinkTime");
+	static FName HoldTimeFName = UKismetStringLibrary::Conv_StringToName(L"Default.SafeZone.WaitTime");
+
+	if (FortGameData) {
+		for (int i = 0; i < GameState->MapInfo->SafeZoneDefinition.ShrinkTimeCached.Num(); i++) {
+			UDataTableFunctionLibrary::EvaluateCurveTableRow(FortGameData, ShrinkTimeFName, i, nullptr,
+				&GameState->MapInfo->SafeZoneDefinition.ShrinkTimeCached[i], {});
+		}
+		for (int i = 0; i < GameState->MapInfo->SafeZoneDefinition.WaitTimeCached.Num(); i++) {
+			UDataTableFunctionLibrary::EvaluateCurveTableRow(FortGameData, HoldTimeFName, i, nullptr,
+				&GameState->MapInfo->SafeZoneDefinition.WaitTimeCached[i], {});
+		}
+	}
+
+	StartNewSafeZonePhaseOG(GameMode, OverrideSafeZonePhase);
+
+	float ChosenWaitTime = 0;
+
+	if (GameMode->SafeZonePhase >= 0 && GameMode->SafeZonePhase < GameState->MapInfo->SafeZoneDefinition.WaitTimeCached.Num())
+		ChosenWaitTime = GameState->MapInfo->SafeZoneDefinition.WaitTimeCached[GameMode->SafeZonePhase];
+
+	GameMode->SafeZoneIndicator->SafeZoneStartShrinkTime = GameState->GetServerWorldTimeSeconds() + ChosenWaitTime;
+
+	float ShrinkingTime = 0;
+
+	if (GameMode->SafeZonePhase >= 0 && GameMode->SafeZonePhase < GameState->MapInfo->SafeZoneDefinition.ShrinkTimeCached.Num())
+		ShrinkingTime = GameState->MapInfo->SafeZoneDefinition.ShrinkTimeCached[GameMode->SafeZonePhase];
+
+	GameMode->SafeZoneIndicator->SafeZoneFinishShrinkTime = GameState->GetServerWorldTimeSeconds() + ShrinkingTime;
 }
 
 void ServerAcknowledgePossession(AFortPlayerControllerAthena* thisPtr, AFortPlayerPawnAthena* P)
@@ -186,13 +264,20 @@ void ServerAcknowledgePossession(AFortPlayerControllerAthena* thisPtr, AFortPlay
 	PlayerState->HeroType = thisPtr->CosmeticLoadoutPC.Character->HeroDefinition;
 	UFortKismetLibrary::UpdatePlayerCustomCharacterPartsVisualization(PlayerState);
 
-	void* InterfaceAddress = Native::GetInterfaceAddress(P, IAbilitySystemInterface::StaticClass());
+
+}
+
+void ServerLoadingScreenDropped(AFortPlayerControllerAthena* thisPtr) 
+{
+	AFortPlayerPawnAthena* Pawn = Util::Cast<AFortPlayerPawnAthena>(thisPtr->MyFortPawn);
+	if (!Pawn) return;
+	void* InterfaceAddress = Native::GetInterfaceAddress(Pawn, IAbilitySystemInterface::StaticClass());
 
 	if (!InterfaceAddress)
 		return;
 
 	TScriptInterface<IAbilitySystemInterface> Script;
-	Script.ObjectPointer = P;
+	Script.ObjectPointer = Pawn;
 	Script.InterfacePointer = InterfaceAddress;
 
 	UFortAbilitySet* DefaultAbilitySet = UObject::FindObject<UFortAbilitySet>("FortAbilitySet GAS_AthenaPlayer.GAS_AthenaPlayer");
@@ -201,6 +286,8 @@ void ServerAcknowledgePossession(AFortPlayerControllerAthena* thisPtr, AFortPlay
 		UFortKismetLibrary::EquipFortAbilitySet(Script, DefaultAbilitySet, nullptr);
 	else
 		FLIPPED_LOG("Invalid DefaultAbilitySet!");
+
+	thisPtr->StatManager = (UStatManager*)UGameplayStatics::SpawnObject(UStatManager::StaticClass(), thisPtr);
 }
 
 void ServerExecuteInventoryItem(AFortPlayerControllerAthena* Controller, const FGuid& ItemGUID)
@@ -255,4 +342,62 @@ void ServerTryActivateAbilityWithEventData(UAbilitySystemComponent* thisPtr, FGa
 		SelectedAbilitySpec->InputPressed = false;
 		thisPtr->ActivatableAbilities.MarkItemDirty(*SelectedAbilitySpec);
 	}
+}
+
+
+void execOnGamePhaseStepChanged(AFortAthenaMutator_GiveItemsAtGamePhaseStep* thisPtr, FFrame* Stack) 
+{
+	FLIPPED_LOG("START");
+	TScriptInterface<IFortSafeZoneInterface> z_Param_Out_SafeZoneInterfaceTemp;
+	TScriptInterface<IFortSafeZoneInterface>* p_Z_Param_Out_SafeZoneInterfaceTemp;
+	EAthenaGamePhaseStep Z_Param_GamePhaseStep;
+
+	if (Stack->Code()) {
+		Stack->Step(Stack->Object(), &z_Param_Out_SafeZoneInterfaceTemp);
+	}
+	else {
+		FProperty* PropertyChainForCompiledIn = Stack->PropertyChainForCompiledIn();
+		Stack->PropertyChainForCompiledIn() = (FProperty*)PropertyChainForCompiledIn->Next;
+		Stack->StepExplicitProperty((unsigned __int8*)&z_Param_Out_SafeZoneInterfaceTemp, PropertyChainForCompiledIn);
+	}
+	unsigned __int8* MostRecentPropertyAddress = Stack->MostRecentPropertyAddress();
+	p_Z_Param_Out_SafeZoneInterfaceTemp = &z_Param_Out_SafeZoneInterfaceTemp;
+	Z_Param_GamePhaseStep = EAthenaGamePhaseStep::None;
+	if (MostRecentPropertyAddress)
+		p_Z_Param_Out_SafeZoneInterfaceTemp = (TScriptInterface<IFortSafeZoneInterface>*)MostRecentPropertyAddress;
+	if (Stack->Code())
+	{
+		Stack->Step(Stack->Object(), &Z_Param_GamePhaseStep);
+	}
+	else
+	{
+		FProperty* PropertyChainForCompiledIn = Stack->PropertyChainForCompiledIn();
+		Stack->PropertyChainForCompiledIn() = (FProperty*)PropertyChainForCompiledIn->Next;
+		Stack->StepExplicitProperty((unsigned __int8*)&Z_Param_GamePhaseStep, PropertyChainForCompiledIn);
+	}
+	unsigned __int8* Code = Stack->Code();
+	Stack->Code() = &Code[Code != 0];
+
+	FLIPPED_LOG("GamePhaseStep: ")
+	FLIPPED_LOG((BYTE*)Z_Param_GamePhaseStep);
+
+}
+
+void execSpawnAI(UAthenaAIServicePlayerBots* Context, FFrame* Stack) {
+	FLIPPED_LOG("Begin Spawn AI");
+}
+
+TSubclassOf<AGameSession>* GetGameSessionClass(AFortGameModeAthena* thisPtr, TSubclassOf<AGameSession>* result)
+{
+	FLIPPED_LOG("GetGameSessionClass");
+	result->ClassPtr = AFortGameSessionDedicatedAthena::StaticClass();
+	return result;
+}
+
+
+const wchar_t* (*GetCommandLineOG)();
+const wchar_t* FCommandLine_GetCommandLine()
+{
+	static auto cmdLine = std::wstring(GetCommandLineOG()) + L" -AllowAllPlaylistsInShipping";
+	return cmdLine.c_str();
 }

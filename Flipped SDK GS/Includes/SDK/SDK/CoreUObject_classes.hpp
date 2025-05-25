@@ -66,6 +66,16 @@ public:
 	{
 		InSDKUtils::CallGameFunction(InSDKUtils::GetVirtualFunction<void(*)(const UObject*, class UFunction*, void*)>(this, Offsets::ProcessEventIdx), this, Function, Parms);
 	}
+
+public:
+	static class UClass* StaticClass()
+	{
+		return StaticClassImpl<"Object">();
+	}
+	static class UObject* GetDefaultObj()
+	{
+		return GetDefaultObjImpl<UObject>();
+	}
 };
 
 // Class CoreUObject.Field

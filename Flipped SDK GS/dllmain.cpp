@@ -12,7 +12,18 @@ DWORD WINAPI Main(LPVOID)
     *(bool*)(Addresses::GIsClient) = false;
     *(bool*)(Addresses::GIsServer) = true;
 
+    FLIPPED_LOG("ImageBase: ");
+    FLIPPED_LOG(uintptr_t(GetModuleHandle(0)));
+
     Util::FHookBase::Initialize();
+
+#pragma region GameSessionPatches
+    Util::FHook("UFortGameInstance::GetServerAnalyticsProvider-PatchFix", Addresses::GameSessionPatch, 0x85);
+#pragma endregion
+
+#pragma region CommandLine
+    Util::FHook("FCommandLine::Get", Addresses::FCommandLineGetCommandLine, FCommandLine_GetCommandLine, DEFINE_OG(GetCommandLineOG));
+#pragma endregion
 
 #pragma region Misc
     Util::FHook("AGameSession::KickPlayer", Addresses::GameSessionKickPlayer, ReturnTrue);
@@ -33,11 +44,14 @@ DWORD WINAPI Main(LPVOID)
 #pragma region FortGameModeAthena
     Util::FHook("AFortGameModeAthena::ReadyToStartMatch", Addresses::ReadyToStartMatch, ReadyToStartMatch);
     Util::FHook("AFortGameModeAthena::SpawnDefaultPawnFor", Addresses::SpawnDefaultPawnFor, SpawnDefaultPawnFor);
+    Util::FHook("AFortGameModeAthena::StartNewSafeZonePhase", Addresses::StartNewSafeZonePhase, StartNewSafeZonePhase, DEFINE_OG(StartNewSafeZonePhaseOG));
+    Util::FHook<AFortGameModeAthena>("AFortGameModeAthena::GetGameSessionClass", Addresses::GetGameSessionClassVFT, GetGameSessionClass);
 #pragma endregion
 
 #pragma region FortPlayerControllerAthena
     Util::FHook<AFortPlayerControllerAthena>("AFortPlayerControllerAthena::ServerExecuteInventoryItem", Addresses::ServerExecuteInventoryItemVFT, ServerExecuteInventoryItem);
     Util::FHook("AFortPlayerControllerAthena::ServerAcknowledgePossession", Addresses::ServerAcknowledgePossession, ServerAcknowledgePossession);
+    Util::FHook<AFortPlayerControllerAthena>("AFortPlayerControllerAthena::ServerLoadingScreenDropped", Addresses::ServerLoadingScreenDroppedVFT, ServerLoadingScreenDropped);
 #pragma endregion
 
 #pragma region AbilitySystemComponent
@@ -46,9 +60,33 @@ DWORD WINAPI Main(LPVOID)
     Util::FHook<UFortAbilitySystemComponentAthena>("UFortAbilitySystemComponentAthena::ServerTryActivateAbilityWithEventData", Addresses::ServerTryActivateAbilityWithEventDataVFT, ServerTryActivateAbilityWithEventData);
 #pragma endregion
 
+#pragma region FortAthenaMutator_GiveItemsAtGamePhaseStep
+    Util::FHook("AFortAthenaMutator_GiveItemsAtGamePhaseStep::OnGamePhaseStepChanged", Addresses::OnGamePhaseStepChanged, execOnGamePhaseStepChanged);
+#pragma endregion
+
+#pragma region AthenaAIServicePlayerBots
+    Util::FHook("UAthenaAIServicePlayerBots::SpawnAI", Addresses::SpawnAI, execSpawnAI);
+#pragma endregion
+
+
+
     UKismetSystemLibrary::ExecuteConsoleCommand(GetWorld(), L"open Artemis_Terrain", nullptr);
     UKismetSystemLibrary::ExecuteConsoleCommand(GetWorld(), L"log LogFortUIDirector", nullptr);
     UKismetSystemLibrary::ExecuteConsoleCommand(GetWorld(), L"log LogQos", nullptr);
+    UKismetSystemLibrary::ExecuteConsoleCommand(GetWorld(), L"log LogFortInventory all", nullptr);
+    UKismetSystemLibrary::ExecuteConsoleCommand(GetWorld(), L"log LogFortWorld", nullptr);
+    UKismetSystemLibrary::ExecuteConsoleCommand(GetWorld(), L"log LogFortMutatorInventoryOverride all", nullptr);
+    UKismetSystemLibrary::ExecuteConsoleCommand(GetWorld(), L"log LogFort all", nullptr);
+    UKismetSystemLibrary::ExecuteConsoleCommand(GetWorld(), L"log LogFortInvServiceComp all", nullptr);
+    UKismetSystemLibrary::ExecuteConsoleCommand(GetWorld(), L"log LogFortPlayerRegistration all");
+    UKismetSystemLibrary::ExecuteConsoleCommand(GetWorld(), L"log LogStreaming");
+    UKismetSystemLibrary::ExecuteConsoleCommand(GetWorld(), L"log LogOnlineGame all");
+    UKismetSystemLibrary::ExecuteConsoleCommand(GetWorld(), L"log LogAthenaAIServiceBots all");
+    UKismetSystemLibrary::ExecuteConsoleCommand(GetWorld(), L"log LogStats all");
+    UKismetSystemLibrary::ExecuteConsoleCommand(GetWorld(), L"log LogAbilitySystem");
+    UKismetSystemLibrary::ExecuteConsoleCommand(GetWorld(), L"log LogHotfixManager all");
+    UKismetSystemLibrary::ExecuteConsoleCommand(GetWorld(), L"log LogOnlineSession all");
+
     GetWorld()->OwningGameInstance->LocalPlayers.Remove(0);
     return 0;
 }
