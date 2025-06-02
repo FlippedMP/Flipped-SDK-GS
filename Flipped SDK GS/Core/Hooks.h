@@ -133,6 +133,7 @@ bool ReadyToStartMatch(AFortGameModeAthena* thisPtr)
 			TArray<FFortItemEntry> OutLootDrops;
 			Looting::PickLootDrops(UWorld::GetWorld(), &OutLootDrops, UKismetStringLibrary::Conv_StringToName(L"Loot_AthenaFloorLoot"), GameState->WorldLevel, 0);
 
+			std::cout << "OutLootDrops: " << OutLootDrops.Num() << std::endl;
 
 			SET_TITLE("Flipped 19.10 - Listening!");
 		}
