@@ -7,7 +7,27 @@ void (*DispatchRequestOG)(__int64, __int64, int); void DispatchRequest(__int64 a
 void (*TickFlushOG)(UNetDriver*); void TickFlush(UNetDriver* Driver) { if (Driver && Driver->ReplicationDriver && Driver->ClientConnections.Num() > 0) Native::ServerReplicateActors(Driver->ReplicationDriver); TickFlushOG(Driver); }
 void (*StartNewSafeZonePhaseOG)(AFortGameModeAthena* GameMode, int32_t NewSafeZonePhase);
 
+static void NiggerPlaylist(AFortGameModeAthena* GameMode, UFortPlaylistAthena* Playlist) {
+	AFortGameStateAthena* GameState = Util::Cast<AFortGameStateAthena>(GameMode->GameState);
 
+	if (!GameState || !Playlist)
+		return;
+
+	GameState->CurrentPlaylistInfo.BasePlaylist = Playlist;
+	GameState->CurrentPlaylistInfo.OverridePlaylist = Playlist;
+	GameState->CurrentPlaylistInfo.PlaylistReplicationKey++;
+	GameState->CurrentPlaylistInfo.MarkArrayDirty();
+
+	GameState->CurrentPlaylistId = Playlist->PlaylistId;
+
+
+	GameMode->CurrentPlaylistId = Playlist->PlaylistId;
+	GameMode->CurrentPlaylistName = Playlist->PlaylistName;
+	GameMode->WarmupRequiredPlayerCount = 1;
+
+	GameState->AirCraftBehavior = Playlist->AirCraftBehavior;
+	GameState->CachedSafeZoneStartUp = Playlist->SafeZoneStartUp;
+}
 
 bool ReadyToStartMatch(AFortGameModeAthena* thisPtr)
 {
@@ -23,23 +43,12 @@ bool ReadyToStartMatch(AFortGameModeAthena* thisPtr)
 		if (UFortPlaylistAthena* Playlist =
 			UObject::FindObject<UFortPlaylistAthena>("FortPlaylistAthena Playlist_DefaultSolo.Playlist_DefaultSolo"))
 		{
-			GameState->CurrentPlaylistInfo.BasePlaylist = Playlist;
-			GameState->CurrentPlaylistInfo.OverridePlaylist = Playlist;
-			GameState->CurrentPlaylistInfo.PlaylistReplicationKey++;
-			GameState->CurrentPlaylistInfo.MarkArrayDirty();
+			NiggerPlaylist(thisPtr, Playlist);
 
-			GameState->CurrentPlaylistId = Playlist->PlaylistId;
-
-
-			thisPtr->CurrentPlaylistId = Playlist->PlaylistId;
-			thisPtr->CurrentPlaylistName = Playlist->PlaylistName;
-			thisPtr->WarmupRequiredPlayerCount = 1;
-
-			GameState->AirCraftBehavior = Playlist->AirCraftBehavior;
-			GameState->CachedSafeZoneStartUp = Playlist->SafeZoneStartUp;
-
-			Playlist->AISettings->AIServices[1] = UAthenaAIServicePlayerBots::StaticClass();
 			thisPtr->AISettings = Playlist->AISettings;
+			if (thisPtr->AISettings) {
+				thisPtr->AISettings->AIServices[1] = UAthenaAIServicePlayerBots::StaticClass();
+			}
 
 			for (int i = 0; i < Playlist->AdditionalLevels.Num(); i++) {
 				TSoftObjectPtr<UWorld> World = Playlist->AdditionalLevels[i];
@@ -58,6 +67,87 @@ bool ReadyToStartMatch(AFortGameModeAthena* thisPtr)
 			GameState->OnFinishedShowingAdditionalPlaylistLevel();
 			GameState->OnRep_AdditionalPlaylistLevelsStreamed();
 			thisPtr->HandleAllPlaylistLevelsVisible();
+			GameState->OnRep_CurrentPlaylistInfo();
+			GameState->OnRep_CurrentPlaylistId();
+
+			thisPtr->AIDirector = Misc::SpawnActor<AAthenaAIDirector>();
+			thisPtr->AIDirector->Activate();
+
+			if (!thisPtr->AIGoalManager)
+			{
+				thisPtr->AIGoalManager = Misc::SpawnActor<AFortAIGoalManager>();
+			}
+
+
+		}
+	}
+
+	if (!thisPtr->bWorldIsReady)
+	{
+		if (UNetDriver* NetDriver = Native::CreateNetDriver_Local(
+			GetEngine(),
+			Native::GetWorldFromContextObject(GetEngine(), GetWorld()),
+			NAME_GameNetDriver)
+			)
+		{
+			GetWorld()->NetDriver = NetDriver;
+			GetWorld()->NetDriver->NetDriverName = NAME_GameNetDriver;
+			GetWorld()->NetDriver->World = GetWorld();
+
+			FURL InURL;
+			InURL.Port = 7777;
+
+			Native::InitListen(GetWorld()->NetDriver, GetWorld(), InURL, false, {});
+			Native::SetWorld(GetWorld()->NetDriver, GetWorld());
+
+			for (FLevelCollection& LevelCollection : GetWorld()->LevelCollections)
+				LevelCollection.NetDriver = GetWorld()->NetDriver;
+
+
+
+			thisPtr->bWorldIsReady = true;
+
+			for (auto& SupportedAthenaLootTierGroup : thisPtr->SupportedAthenaLootTierGroups) {
+				FLIPPED_LOG("SupportedAthenaLootTierGroups: " + SupportedAthenaLootTierGroup.ToString());
+			}
+
+			for (auto& [SupportTierGroup, Redirect] : thisPtr->RedirectAthenaLootTierGroups) {
+				FLIPPED_LOG(SupportTierGroup.ToString());
+				FLIPPED_LOG(Redirect.ToString());
+			} /*using this we can determine if TierGroup == SupportTierGroup, Redirect to AthenaTierGroup*/
+
+			GameState->DefaultRebootMachineHotfix = 1;
+
+			if (auto InventoryManager = Util::Cast<UFortGameInstance>(UWorld::GetWorld()->OwningGameInstance)->InventoryManager) {
+				FLIPPED_LOG("Inventory Manager");
+			}
+			else {
+				Util::Cast<UFortGameInstance>(UWorld::GetWorld()->OwningGameInstance)->InventoryManager =
+					(UFortInventoryManager*)UGameplayStatics::SpawnObject(UFortInventoryManager::StaticClass(),
+						Util::Cast<UFortGameInstance>(UWorld::GetWorld()->OwningGameInstance));
+				Util::Cast<UFortGameInstance>(UWorld::GetWorld()->OwningGameInstance)->InventoryManager->PersistenceManager =
+					(UVkPersistenceManager*)UGameplayStatics::SpawnObject(UVkPersistenceManager::StaticClass(),
+						Util::Cast<UFortGameInstance>(UWorld::GetWorld()->OwningGameInstance)->InventoryManager);
+			} /*So Improper*/
+			
+			TArray<FFortItemEntry> OutLootDrops;
+			Looting::PickLootDrops(UWorld::GetWorld(), &OutLootDrops, UKismetStringLibrary::Conv_StringToName(L"Loot_AthenaFloorLoot"), GameState->WorldLevel, 0);
+
+
+			SET_TITLE("Flipped 19.10 - Listening!");
+		}
+
+	}
+
+	if (bUsesGameSessions) {
+		static bool bWaitedForPlaylist = false;
+		if (!bWaitedForPlaylist) {
+			if (!thisPtr->CurrentBucketId.IsValid())
+				return false;
+
+			FLIPPED_LOG(thisPtr->CurrentBucketId.ToString());
+			FLIPPED_LOG("JOBS");
+			bWaitedForPlaylist = true;
 		}
 	}
 
@@ -86,61 +176,7 @@ bool ReadyToStartMatch(AFortGameModeAthena* thisPtr)
 			return false;
 	}
 
-	if (!thisPtr->bWorldIsReady)
-	{
-		if (UNetDriver* NetDriver = Native::CreateNetDriver_Local(
-			GetEngine(), 
-			Native::GetWorldFromContextObject(GetEngine(), GetWorld()), 
-			NAME_GameNetDriver)
-		)
-		{
-			GetWorld()->NetDriver = NetDriver;
-			GetWorld()->NetDriver->NetDriverName = NAME_GameNetDriver;
-			GetWorld()->NetDriver->World = GetWorld();
-
-			FURL InURL;
-			InURL.Port = 7777;
-
-			Native::InitListen(GetWorld()->NetDriver, GetWorld(), InURL, false, {});
-			Native::SetWorld(GetWorld()->NetDriver, GetWorld());
-
-			for (FLevelCollection& LevelCollection : GetWorld()->LevelCollections)
-				LevelCollection.NetDriver = GetWorld()->NetDriver;	
-
-			GameState->OnRep_CurrentPlaylistInfo();
-			GameState->OnRep_CurrentPlaylistId();
-			thisPtr->bWorldIsReady = true;
-
-
-
-			for (auto& SupportedAthenaLootTierGroup : thisPtr->SupportedAthenaLootTierGroups) {
-				FLIPPED_LOG("SupportedAthenaLootTierGroups: " + SupportedAthenaLootTierGroup.ToString());
-			}
-
-			for (auto& [SupportTierGroup, Redirect] : thisPtr->RedirectAthenaLootTierGroups) {
-				FLIPPED_LOG(SupportTierGroup.ToString());
-				FLIPPED_LOG(Redirect.ToString());
-			} /*using this we can determine if TierGroup == SupportTierGroup, Redirect to AthenaTierGroup*/
-
-			GameState->DefaultRebootMachineHotfix = 1;
-
-			if (auto InventoryManager = Util::Cast<UFortGameInstance>(UWorld::GetWorld()->OwningGameInstance)->InventoryManager) {
-				FLIPPED_LOG("Inventory Manager");
-			}
-			else {
-				Util::Cast<UFortGameInstance>(UWorld::GetWorld()->OwningGameInstance)->InventoryManager = 
-					(UFortInventoryManager*)UGameplayStatics::SpawnObject(UFortInventoryManager::StaticClass(), 
-					Util::Cast<UFortGameInstance>(UWorld::GetWorld()->OwningGameInstance));
-				Util::Cast<UFortGameInstance>(UWorld::GetWorld()->OwningGameInstance)->InventoryManager->PersistenceManager = 
-					(UVkPersistenceManager*)UGameplayStatics::SpawnObject(UVkPersistenceManager::StaticClass(), 
-					Util::Cast<UFortGameInstance>(UWorld::GetWorld()->OwningGameInstance)->InventoryManager);
-			} /*So Improper*/
-			//thisPtr->AISettings->AIServices.Add(UAthenaAIServicePlayerBots::StaticClass());
-
-			SET_TITLE("Flipped 19.10 - Listening!");
-		}
-
-	}
+	
 
 	return thisPtr->NumPlayers >= thisPtr->WarmupRequiredPlayerCount;
 }
@@ -400,4 +436,57 @@ const wchar_t* FCommandLine_GetCommandLine()
 {
 	static auto cmdLine = std::wstring(GetCommandLineOG()) + L" -AllowAllPlaylistsInShipping";
 	return cmdLine.c_str();
+}
+
+const static FString ID = TEXT("ec684b8c687f479fadea3cb2ad83f5c6");
+
+FServicePermissionsMcp* GetServicePermissionsByName(void* a1, void* a2)
+{
+	auto ServicePermissions = reinterpret_cast<TArray<FServicePermissionsMcp>*>(uint64(a1) + 0x98);
+	if (!ServicePermissions || ServicePermissions->Num() == 0)
+		return nullptr;
+
+	FLIPPED_LOG(ServicePermissions->Num());
+
+	FServicePermissionsMcp* Permissions = new FServicePermissionsMcp();
+	Permissions->Id = ID;
+
+	return Permissions;
+}
+
+void (*CreateAndConfigureNavSystemOG)(UAthenaNavSystemConfig*, UWorld*);
+void CreateAndConfigureNavSystem(UAthenaNavSystemConfig* Config, UWorld* World)
+{
+	FLIPPED_LOG("CreateAndConfigureNavSystem");
+	Config->bPrioritizeNavigationAroundSpawners = true;
+	Config->bAutoSpawnMissingNavData = true;
+	Config->bLazyOctree = true;
+	return CreateAndConfigureNavSystemOG(Config, World);
+}
+
+void InitalizeMMRInfos(UAthenaAIServicePlayerBots* thisPtr)
+{
+	FLIPPED_LOG("InitalizeMMRInfos");
+	auto AIService = UAthenaAIBlueprintLibrary::GetAIServicePlayerBots(UWorld::GetWorld());
+	AIService->DefaultBotAISpawnerData = Native::StaticLoadObject<UClass>("/Game/Athena/AI/Phoebe/BP_AISpawnerData_Phoebe.BP_AISpawnerData_Phoebe_C");
+
+	FMMRSpawningInfo NewSpawningInfo{};
+	NewSpawningInfo.BotSpawningDataInfoTargetELO = 1000.f; // todo: get proper value
+	NewSpawningInfo.BotSpawningDataInfoWeight = 100.f; // todo: get proper value
+	NewSpawningInfo.NumBotsToSpawn = 70;
+	NewSpawningInfo.AISpawnerData = thisPtr->DefaultBotAISpawnerData;
+
+	thisPtr->CachedMMRSpawningInfo.SpawningInfos.Add(NewSpawningInfo);
+}
+
+void (*WaitForMatchAssignmentReadyOG)(UAthenaAIServicePlayerBots*, __int64);
+void WaitForMatchAssignmentReady(UAthenaAIServicePlayerBots* thisPtr, __int64 FlowHandle)
+{
+	auto GameState = UWorld::GetWorld()->GameState;
+
+	FLIPPED_LOG(__FUNCTION__);
+
+	*reinterpret_cast<int*>(__int64(thisPtr) + 0xB28) = GameState->PlayerArray.Num();
+
+	return WaitForMatchAssignmentReadyOG(thisPtr, FlowHandle);
 }

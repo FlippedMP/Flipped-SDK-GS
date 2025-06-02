@@ -36,9 +36,13 @@ namespace Addresses {
 	const inline uint64_t OnGamePhaseStepChanged = 0x6A69F80; //AFortAthenaMutator_GiveItemsAtGamePhaseStep
 	
 	const inline uint64_t SpawnAI = 0x69D5510;
+	const inline uint64_t CreateAndConfigureNavigationSystem = 0x1F96F68;
+
+	const inline uint64_t CanCreateInCurrentContext = 0xD708E0;
 
 	const inline uint64_t GameSessionPatch = 0x65B510F + 1;
 	const inline uint64_t FCommandLineGetCommandLine = 0xB71D9C;
+	const inline uint64_t ServicePermissionsByName = 0x17F5A4C;
 
 	const inline std::vector<uint64_t> NullFunctions =
 	{

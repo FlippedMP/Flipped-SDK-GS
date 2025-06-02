@@ -78,6 +78,8 @@ public:
 	}
 };
 
+
+
 // Class CoreUObject.Field
 // 0x0008 (0x0030 - 0x0028)
 class UField : public UObject

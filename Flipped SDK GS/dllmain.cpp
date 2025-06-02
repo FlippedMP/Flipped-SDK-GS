@@ -15,14 +15,20 @@ DWORD WINAPI Main(LPVOID)
     FLIPPED_LOG("ImageBase: ");
     FLIPPED_LOG(uintptr_t(GetModuleHandle(0)));
 
+
+
     Util::FHookBase::Initialize();
 
 #pragma region GameSessionPatches
     Util::FHook("UFortGameInstance::GetServerAnalyticsProvider-PatchFix", Addresses::GameSessionPatch, 0x85);
+    Misc::Patch<uint8_t>(Addresses::ImageBase + 0x10268A1, 0x85);
+
 #pragma endregion
 
 #pragma region CommandLine
-    Util::FHook("FCommandLine::Get", Addresses::FCommandLineGetCommandLine, FCommandLine_GetCommandLine, DEFINE_OG(GetCommandLineOG));
+    if (bUsesGameSessions) {
+        Util::FHook("FCommandLine::Get", Addresses::FCommandLineGetCommandLine, FCommandLine_GetCommandLine, DEFINE_OG(GetCommandLineOG));
+    }
 #pragma endregion
 
 #pragma region Misc
@@ -32,6 +38,9 @@ DWORD WINAPI Main(LPVOID)
 
     Util::FHook("UWorld::GetNetMode", Addresses::WorldGetNetMode, ReturnTrue);
     Util::FHook("AActor::GetNetMode", Addresses::ActorGetNetMode, ReturnTrue);
+    Util::FHook("UAthenaNavSystemConfig::CreateAndConfigureNavigationSystem", Addresses::CreateAndConfigureNavigationSystem, CreateAndConfigureNavSystem, DEFINE_OG(CreateAndConfigureNavSystemOG));
+
+	Util::FHook<UObject>("UObject::CanCreateInCurrentConext", uint32(0x100 / 8), ReturnTrue);
 
     int NullCount = 0; // i refuse to use c style loops for this nigga
     for (uint64_t Address : Addresses::NullFunctions)
@@ -45,7 +54,10 @@ DWORD WINAPI Main(LPVOID)
     Util::FHook("AFortGameModeAthena::ReadyToStartMatch", Addresses::ReadyToStartMatch, ReadyToStartMatch);
     Util::FHook("AFortGameModeAthena::SpawnDefaultPawnFor", Addresses::SpawnDefaultPawnFor, SpawnDefaultPawnFor);
     Util::FHook("AFortGameModeAthena::StartNewSafeZonePhase", Addresses::StartNewSafeZonePhase, StartNewSafeZonePhase, DEFINE_OG(StartNewSafeZonePhaseOG));
-    Util::FHook<AFortGameModeAthena>("AFortGameModeAthena::GetGameSessionClass", Addresses::GetGameSessionClassVFT, GetGameSessionClass);
+    if (bUsesGameSessions) {
+        Util::FHook<AFortGameModeAthena>("AFortGameModeAthena::GetGameSessionClass", Addresses::GetGameSessionClassVFT, GetGameSessionClass);
+    }
+
 #pragma endregion
 
 #pragma region FortPlayerControllerAthena
@@ -65,8 +77,26 @@ DWORD WINAPI Main(LPVOID)
 #pragma endregion
 
 #pragma region AthenaAIServicePlayerBots
-    Util::FHook("UAthenaAIServicePlayerBots::SpawnAI", Addresses::SpawnAI, execSpawnAI);
+    /*
+    MH_CreateHook(LPVOID(Addresses::ImageBase + Addresses::SpawnAI), execSpawnAI, nullptr);
+    MH_EnableHook(LPVOID(Addresses::ImageBase + Addresses::SpawnAI));
+     */
+
+    Misc::Patch<uint32_t>(Addresses::ImageBase + 0x5EE0507, 0x1C4C899); //0x7B2CDA4 - (0x5EE0504 + 7)
+    MH_CreateHook(LPVOID(Addresses::ImageBase + 0x7B2CDA4), InitalizeMMRInfos, nullptr);
+    MH_EnableHook(LPVOID(Addresses::ImageBase + 0x7B2CDA4));
+
+    //Util::FHook("UAthenaAIServicePlayerBots::WaitForMatchAssignmentReady", uint64(0x5EE9524), WaitForMatchAssignmentReady, DEFINE_OG(WaitForMatchAssignmentReadyOG));
+
 #pragma endregion
+
+
+    if (bUsesGameSessions) {
+#pragma region ServiceConfigMcp
+        Util::FHook("FServiceConfigMcp::GetServicePermissionsByName", Addresses::ServicePermissionsByName, GetServicePermissionsByName);
+#pragma endregion
+    }
+
 
 
 
@@ -86,6 +116,7 @@ DWORD WINAPI Main(LPVOID)
     UKismetSystemLibrary::ExecuteConsoleCommand(GetWorld(), L"log LogAbilitySystem");
     UKismetSystemLibrary::ExecuteConsoleCommand(GetWorld(), L"log LogHotfixManager all");
     UKismetSystemLibrary::ExecuteConsoleCommand(GetWorld(), L"log LogOnlineSession all");
+    UKismetSystemLibrary::ExecuteConsoleCommand(GetWorld(), L"log LogMatchmakingServiceDedicatedServer all");
 
     GetWorld()->OwningGameInstance->LocalPlayers.Remove(0);
     return 0;

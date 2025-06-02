@@ -306,6 +306,18 @@ namespace UC
 			return true;
 		}
 
+		inline bool Contains(const ArrayElementType& Element)
+		{
+			for (int i = 0; i < NumElements; i++)
+			{
+				if (!IsValidIndex(i)) continue;
+
+				if (Data[i] == Element)
+					return true;
+			}
+			return false;
+		}
+
 		inline void Clear()
 		{
 			NumElements = 0;

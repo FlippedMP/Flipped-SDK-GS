@@ -21,6 +21,8 @@ using namespace SDK;
 
 static FName NAME_GameNetDriver = UKismetStringLibrary::Conv_StringToName(L"GameNetDriver");
 
+static bool bUsesGameSessions = false;
+
 enum EHookType
 {
 	Normal,
@@ -28,7 +30,7 @@ enum EHookType
 	Patch
 };
 
-static int ReturnTrue() { return true; }
+static int ReturnTrue() { return 1; }
 static void ReturnHook() { return; }
 
 __forceinline UEngine* GetEngine() { return UEngine::GetEngine(); }
@@ -103,6 +105,19 @@ namespace Util
 			Detour = _Detour;
 			OG = _OG;
 			Type = Virtual;
+
+			if (UEClass::StaticClass() == UObject::StaticClass())
+			{
+				for (int i = 0; i < UObject::GObjects->Num(); i++)
+				{
+					UObject* Object = UObject::GObjects->GetByIndex(i);
+					if (Object)
+					{
+						VirtualHookInternal(Object->VTable, Index, Detour, OG);
+					}
+				}
+				return;
+			}
 
 			VirtualHookInternal(VTable, Index, Detour, OG);
 		}
@@ -194,6 +209,33 @@ namespace Misc
 
 		Actors.Free();
 	}
+
+	static void ModifyInstruction_Internal(uintptr_t Instruction, uintptr_t NewAddress)
+	{
+		uint8_t* InstructionAddr = (uint8_t*)Instruction;
+		uint8_t* NewAddr = (uint8_t*)NewAddress;
+
+		int64_t Relative = (int64_t)(NewAddr - (InstructionAddr + 5));
+
+		int32_t* addr = reinterpret_cast<int32_t*>(InstructionAddr + 1);
+
+		DWORD dwProtection;
+		VirtualProtect(addr, sizeof(int32_t), PAGE_EXECUTE_READWRITE, &dwProtection);
+
+		*addr = static_cast<int32_t>(Relative);
+
+		DWORD dwTemp;
+		VirtualProtect(addr, sizeof(int32_t), dwProtection, &dwTemp);
+	}
+
+	template <typename _Is>
+	static __forceinline void Patch(uintptr_t ptr, _Is byte)
+	{
+		DWORD og;
+		VirtualProtect(LPVOID(ptr), sizeof(_Is), PAGE_EXECUTE_READWRITE, &og);
+		*(_Is*)ptr = byte;
+		VirtualProtect(LPVOID(ptr), sizeof(_Is), og, &og);
+	}
 }
 
 class FFrame
@@ -225,4 +267,12 @@ public:
 		static void (*StepExplicitPropertyOriginal)(__int64, unsigned __int8*, FProperty*) = decltype(StepExplicitPropertyOriginal)(InSDKUtils::GetImageBase() + 0xCC9C90);
 		StepExplicitPropertyOriginal(__int64(this), Result, Property);
 	}
+};
+
+class FServicePermissionsMcp
+{
+public:
+	FString Name;
+	FString Id;
+	FString Key;
 };
