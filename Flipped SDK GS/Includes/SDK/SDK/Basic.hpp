@@ -545,12 +545,15 @@ public:
 
 class FSoftObjectPtr : public TPersistentObjectPtr<FakeSoftObjectPtr::FSoftObjectPath>
 {
+public:
+
 };
 
 template<typename UEType>
 class TSoftObjectPtr : public FSoftObjectPtr
 {
 public:
+
 	UEType* Get() const
 	{
 		return static_cast<UEType*>(TPersistentObjectPtr::Get());
@@ -558,6 +561,12 @@ public:
 	UEType* operator->() const
 	{
 		return static_cast<UEType*>(TPersistentObjectPtr::Get());
+	}
+
+	UEType* NewGet() const;
+
+	bool IsValid() const {
+		return this->WeakPtr.ObjectIndex != -1 || this->ObjectID.IsValid();
 	}
 };
 
