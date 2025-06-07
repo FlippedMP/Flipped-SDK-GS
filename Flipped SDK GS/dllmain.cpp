@@ -90,6 +90,10 @@ DWORD WINAPI Main(LPVOID)
 
 #pragma endregion
 
+#pragma region BuildingContainer
+    Util::FHook("ABuldingContainer::SpawnLoot", Addresses::SpawnLoot, SpawnLoot);
+#pragma endregion
+
 
     if (bUsesGameSessions) {
 #pragma region ServiceConfigMcp
@@ -97,6 +101,9 @@ DWORD WINAPI Main(LPVOID)
 #pragma endregion
     }
 
+#pragma region FortControllerComponent_Aircraft
+    Util::FHook<UFortControllerComponent_Aircraft>("UFortControllerComponent_Aircraft::ServerAttemptAircraftJump", Addresses::ServerAttemptAircraftJumpVFT, ServerAttemptAircraftJump);
+#pragma endregion
 
 
 

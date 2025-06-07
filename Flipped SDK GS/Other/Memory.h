@@ -44,6 +44,10 @@ namespace Addresses {
 	const inline uint64_t FCommandLineGetCommandLine = 0xB71D9C;
 	const inline uint64_t ServicePermissionsByName = 0x17F5A4C;
 
+	const inline uint64_t SpawnLoot = 0x617CCBC;
+
+	const inline uint32_t ServerAttemptAircraftJumpVFT = 0x4F0 / 8;
+
 	const inline std::vector<uint64_t> NullFunctions =
 	{
 		0x258D0DC // ChangeGamesessionId

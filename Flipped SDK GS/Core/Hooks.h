@@ -138,24 +138,13 @@ bool ReadyToStartMatch(AFortGameModeAthena* thisPtr)
 			{
 				auto Container = (ABuildingContainer*)WarmupActor;
 
-				TArray<FFortItemEntry> Entrys;
-				Looting::PickLootDrops(UWorld::GetWorld(), &Entrys, Container->SearchLootTierGroup, GameState->WorldLevel, 0);
-				FVector Location = Container->K2_GetActorLocation();
-				Location.Z += 30;
-				for (auto& item : Entrys)
-				{
-					FSpawnPickupData Data{};
-					Data.ItemDefinition = item.ItemDefinition;
-					Data.Count = item.Count;
-					Data.Location = Location;
-					Data.FortPickupSourceTypeFlag = EFortPickupSourceTypeFlag::FloorLoot;
-					Data.FortPickupSpawnSource = EFortPickupSpawnSource::Unset;
-					Looting::SpawnPickup(Data);
-				}
+				
 
 				Container->K2_DestroyActor();
 			}
 			WarmupActors.Free();
+
+
 
 			SET_TITLE("Flipped 19.10 - Listening!");
 		}
@@ -512,4 +501,55 @@ void WaitForMatchAssignmentReady(UAthenaAIServicePlayerBots* thisPtr, __int64 Fl
 	*reinterpret_cast<int*>(__int64(thisPtr) + 0xB28) = GameState->PlayerArray.Num();
 
 	return WaitForMatchAssignmentReadyOG(thisPtr, FlowHandle);
+}
+
+bool SpawnLoot(ABuildingContainer* Container) {
+
+	auto GameState = Util::Cast<AFortGameStateAthena>(UWorld::GetWorld()->GameState);
+	auto GameMode = Util::Cast<AFortGameModeAthena>(UWorld::GetWorld()->AuthorityGameMode);
+	if (!GameState || !GameMode || !Container || Container->bAlreadySearched)
+		return false;
+
+
+
+	FName LootTierGroupToUse = Container->SearchLootTierGroup;
+
+	for (auto& [SupportTierGroup, Redirect] : GameMode->RedirectAthenaLootTierGroups) {
+		if (Container->SearchLootTierGroup == SupportTierGroup)
+			LootTierGroupToUse = Redirect;
+	}
+
+	TArray<FFortItemEntry> Entries;
+	Looting::PickLootDrops(UWorld::GetWorld(), &Entries, LootTierGroupToUse, GameState->WorldLevel, 0, true);
+
+	if (Entries.Num() <= 0)
+		return false;
+
+	FVector Location = Container->K2_GetActorLocation();
+	Location.Z += 20;
+	for (const FFortItemEntry& Entry : Entries) {
+		FSpawnPickupData Data{};
+		Data.ItemDefinition = Entry.ItemDefinition;
+		Data.Count = Entry.Count;
+		Data.Location = Location;
+		Data.FortPickupSourceTypeFlag = EFortPickupSourceTypeFlag::Container;
+		Data.FortPickupSpawnSource = EFortPickupSpawnSource::Unset;
+		Looting::SpawnPickup(Data);
+	}
+
+	Container->bAlreadySearched = true;
+	Container->OnRep_bAlreadySearched();
+	Container->SearchBounceData.SearchAnimationCount++;
+	Container->BounceContainer();
+
+	return Container;
+}
+
+void ServerAttemptAircraftJump(UFortControllerComponent_Aircraft* thisPtr, FRotator Rotation) {
+	AFortPlayerControllerAthena* Owner = Util::Cast<AFortPlayerControllerAthena>(thisPtr->GetOwner());
+	if (!Owner || !Owner->IsInAircraft()) return;
+
+	AFortGameModeAthena* GameMode = Util::Cast<AFortGameModeAthena>(UWorld::GetWorld()->AuthorityGameMode);
+
+	GameMode->RestartPlayer(Owner);
 }

@@ -306,10 +306,12 @@ public:
 template<typename UEType>
 UEType* SDK::TSoftObjectPtr<UEType>::NewGet() const
 {
+	std::string String = UKismetStringLibrary::Conv_NameToString(this->ObjectID.AssetPathName).ToString();
+	printf("Getting %s\n", String.c_str());
 	if (this->WeakPtr.ObjectIndex != -1)
 		return Util::Cast<UEType>(UObject::GObjects->GetByIndex(this->WeakPtr.ObjectIndex));
 	else if (this->ObjectID.IsValid())
-		return Native::StaticLoadObject<UEType>(this->ObjectID.AssetPathName.ToString());
+		return Native::StaticLoadObject<UEType>(String);
 
 	return nullptr;
 }
