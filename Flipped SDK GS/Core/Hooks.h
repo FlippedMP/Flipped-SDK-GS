@@ -130,10 +130,32 @@ bool ReadyToStartMatch(AFortGameModeAthena* thisPtr)
 						Util::Cast<UFortGameInstance>(UWorld::GetWorld()->OwningGameInstance)->InventoryManager);
 			} /*So Improper*/
 			
-			TArray<FFortItemEntry> OutLootDrops;
-			Looting::PickLootDrops(UWorld::GetWorld(), &OutLootDrops, UKismetStringLibrary::Conv_StringToName(L"Loot_AthenaFloorLoot"), GameState->WorldLevel, 0);
+			TArray<AActor*> WarmupActors;
+			static UClass* WarmupClass = Native::StaticLoadObject<UClass>("/Game/Athena/Environments/Blueprints/Tiered_Athena_FloorLoot_Warmup.Tiered_Athena_FloorLoot_Warmup_C");
+			UGameplayStatics::GetAllActorsOfClass(GetWorld(), WarmupClass, &WarmupActors);
 
-			std::cout << "OutLootDrops: " << OutLootDrops.Num() << std::endl;
+			for (auto& WarmupActor : WarmupActors)
+			{
+				auto Container = (ABuildingContainer*)WarmupActor;
+
+				TArray<FFortItemEntry> Entrys;
+				Looting::PickLootDrops(UWorld::GetWorld(), &Entrys, Container->SearchLootTierGroup, GameState->WorldLevel, 0);
+				FVector Location = Container->K2_GetActorLocation();
+				Location.Z += 30;
+				for (auto& item : Entrys)
+				{
+					FSpawnPickupData Data{};
+					Data.ItemDefinition = item.ItemDefinition;
+					Data.Count = item.Count;
+					Data.Location = Location;
+					Data.FortPickupSourceTypeFlag = EFortPickupSourceTypeFlag::FloorLoot;
+					Data.FortPickupSpawnSource = EFortPickupSpawnSource::Unset;
+					Looting::SpawnPickup(Data);
+				}
+
+				Container->K2_DestroyActor();
+			}
+			WarmupActors.Free();
 
 			SET_TITLE("Flipped 19.10 - Listening!");
 		}

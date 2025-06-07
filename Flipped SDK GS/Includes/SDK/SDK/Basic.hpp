@@ -347,6 +347,10 @@ public:
 	{
 		return ComparisonIndex != Other.ComparisonIndex || Number != Other.Number;
 	}
+
+	bool IsValid() const {
+		return this->ToString() != "None";
+	}
 };
 
 template<typename ClassType>
@@ -530,6 +534,11 @@ struct FSoftObjectPath
 public:
 	class FName                                   AssetPathName;                                     // 0x0000(0x0008)(ZeroConstructor, IsPlainOldData, NoDestructor, HasGetValueTypeHash, NativeAccessSpecifierPublic)
 	class FString                                 SubPathString;                                     // 0x0008(0x0010)(ZeroConstructor, HasGetValueTypeHash, NativeAccessSpecifierPublic)
+
+public:
+	bool IsValid() const {
+		return this->AssetPathName.IsValid();
+	}
 };
 
 }

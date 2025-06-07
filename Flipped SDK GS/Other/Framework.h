@@ -187,6 +187,26 @@ namespace Misc
 		return Center + FVector(x, y, 0.0f);
 	}
 
+	template<typename T>
+	std::vector<T*> GetObjectsOfClass(UClass* Class = T::StaticClass())
+	{
+		std::vector<T*> ArrayOfObjects;
+		for (int i = 0; i < UObject::GObjects->Num(); i++)
+		{
+			UObject* Object = UObject::GObjects->GetByIndex(i);
+
+			if (!Object)
+				continue;
+
+			if (Object->IsA(Class))
+			{
+				ArrayOfObjects.push_back(Util::Cast<T>(Object));
+			}
+		}
+
+		return ArrayOfObjects;
+	}
+
 	UCurveTable* GetGameData() {
 		return Native::StaticFindObject<UCurveTable>("/Game/Athena/Balance/DataTables/AthenaGameData.AthenaGameData");
 	}
@@ -208,6 +228,11 @@ namespace Misc
 		}
 
 		Actors.Free();
+	}
+
+	UFortPlaylistAthena* CurrentPlaylist()
+	{
+		return Util::Cast<AFortGameStateAthena>(UWorld::GetWorld()->GameState)->CurrentPlaylistInfo.BasePlaylist;
 	}
 
 	static void ModifyInstruction_Internal(uintptr_t Instruction, uintptr_t NewAddress)
