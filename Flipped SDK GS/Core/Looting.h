@@ -68,32 +68,7 @@ namespace Looting
 
             NewPickup->bRandomRotation = bRandomRotation;
 
-            if (NewPickup->MovementComponent)
-            {
-                NewPickup->SetActorEnableCollision(true);
-                NewPickup->MovementComponent->bShouldBounce = true;
-                NewPickup->MovementComponent->Bounciness += 10.f;
-
-                NewPickup->SetReplicateMovement(true);
-                NewPickup->bReplicateMovement = true;
-                NewPickup->OnRep_ReplicateMovement();
-            }
-
-            FVector FinalLocation = Location;
-
-            if (FortPickupSourceTypeFlag == EFortPickupSourceTypeFlag::Container)
-            {
-                FinalLocation = Location + (NewPickup->GetActorForwardVector() * 200.f);
-                FinalLocation += Misc::GetRandomLocationInCircle(Location, 300.f);
-
-                NewPickup->bTossedFromContainer = true;
-                NewPickup->OnRep_TossedFromContainer();
-            }
-
-            if (FortPickupSpawnSource == EFortPickupSpawnSource::PlayerElimination)
-                FinalLocation = Misc::GetRandomLocationInCircle(Location, 1700.f);
-
-            NewPickup->TossPickup(FinalLocation, ItemOwner, 0, true, false, FortPickupSourceTypeFlag, FortPickupSpawnSource);
+            NewPickup->TossPickup(Location, ItemOwner, 0, true, false, FortPickupSourceTypeFlag, FortPickupSpawnSource);
 
             return NewPickup;
         }
@@ -174,7 +149,7 @@ namespace Looting
             OutLootPackageTables->Add(BasePackagesDataTable);
         }
 
-        /*
+        
 
         std::vector<UFortGameFeatureData*> GameFeatureDataArray = Misc::GetObjectsOfClass<UFortGameFeatureData>();
 
@@ -216,7 +191,7 @@ namespace Looting
                     }
                 }
             }
-        } */
+        } 
     }
 
     void PickLootDropsFromLootPackage(const TArray<UDataTable*>& LootPackageTables, TArray<FFortLootPackageData*>& CachedLootPackageData, const FName& LootPackageName, TArray<FFortItemEntry>*& OutEntries, int LootPackageCategory = -1) {
@@ -228,7 +203,9 @@ namespace Looting
             for (TPair<FName, uint8*> RowPair : LootPackageDataTable->RowMap) {
                 FFortLootPackageData* RowData = reinterpret_cast<FFortLootPackageData*>(RowPair.Second);
                 if (RowData && RowData->LootPackageID == LootPackageName && RowData->Weight != 0) {
-                    CachedLootPackageData.Add(RowData);
+                    if (LootPackageCategory != -1 ? RowData->LootPackageCategory == LootPackageCategory : true) {
+                        CachedLootPackageData.Add(RowData);
+                    }
                 }
             }
         }
@@ -330,12 +307,13 @@ namespace Looting
 
     TArray<UDataTable*> LootTierDataTables;
     TArray<UDataTable*> LootPackagesTables;
-    bool PickLootDrops(UWorld* WorldContextObject, TArray<FFortItemEntry>* OutLootToDrop, const FName TierGroupName, const int32 WorldLevel, const int32 ForcedLootTier, bool bForceUpdateTables = false)
+    bool PickLootDrops(UWorld* WorldContextObject, TArray<FFortItemEntry>* OutLootToDrop, const FName TierGroupName, const int32 WorldLevel, const int32 ForcedLootTier = -1, bool bForceUpdateTables = false)
     {
         if (!WorldContextObject)
             return false;
-        
 
+        if (!TierGroupName.ToString().contains("FloorLoot"))
+            bForceUpdateTables = true;
 
         if (bForceUpdateTables || (LootTierDataTables.Num() <= 0 && LootPackagesTables.Num() <= 0))
         {

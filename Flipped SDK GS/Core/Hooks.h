@@ -138,7 +138,7 @@ bool ReadyToStartMatch(AFortGameModeAthena* thisPtr)
 			{
 				auto Container = (ABuildingContainer*)WarmupActor;
 
-				
+				Container->BP_SpawnLoot(nullptr);
 
 				Container->K2_DestroyActor();
 			}
@@ -510,8 +510,6 @@ bool SpawnLoot(ABuildingContainer* Container) {
 	if (!GameState || !GameMode || !Container || Container->bAlreadySearched)
 		return false;
 
-
-
 	FName LootTierGroupToUse = Container->SearchLootTierGroup;
 
 	for (auto& [SupportTierGroup, Redirect] : GameMode->RedirectAthenaLootTierGroups) {
@@ -520,7 +518,7 @@ bool SpawnLoot(ABuildingContainer* Container) {
 	}
 
 	TArray<FFortItemEntry> Entries;
-	Looting::PickLootDrops(UWorld::GetWorld(), &Entries, LootTierGroupToUse, GameState->WorldLevel, 0, true);
+	Looting::PickLootDrops(UWorld::GetWorld(), &Entries, LootTierGroupToUse, GameState->WorldLevel);
 
 	if (Entries.Num() <= 0)
 		return false;
@@ -529,6 +527,7 @@ bool SpawnLoot(ABuildingContainer* Container) {
 	Location.Z += 20;
 	for (const FFortItemEntry& Entry : Entries) {
 		FSpawnPickupData Data{};
+		printf("Entry: %s\n", Entry.ItemDefinition->GetFullName().c_str());
 		Data.ItemDefinition = Entry.ItemDefinition;
 		Data.Count = Entry.Count;
 		Data.Location = Location;
