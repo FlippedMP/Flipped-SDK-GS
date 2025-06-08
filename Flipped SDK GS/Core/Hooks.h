@@ -78,7 +78,7 @@ bool ReadyToStartMatch(AFortGameModeAthena* thisPtr)
 				thisPtr->AIGoalManager = Misc::SpawnActor<AFortAIGoalManager>();
 			}
 
-
+			GameState->DefaultRedeployGliderHeightLimit = 10000;
 		}
 	}
 
