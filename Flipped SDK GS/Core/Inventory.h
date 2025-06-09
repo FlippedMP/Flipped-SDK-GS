@@ -13,6 +13,7 @@ namespace Inventory
 
 		Controller->WorldInventory->bRequiresLocalUpdate = true;
 		Controller->WorldInventory->HandleInventoryLocalUpdate();
+		Controller->HandleWorldInventoryLocalUpdate();
 	}
 
 	void UpdateEntry(AFortPlayerControllerAthena* Controller, UFortItemDefinition* Definition, int Count, int LoadedAmmo = -1) {

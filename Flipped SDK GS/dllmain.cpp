@@ -64,6 +64,7 @@ DWORD WINAPI Main(LPVOID)
     Util::FHook<AFortPlayerControllerAthena>("AFortPlayerControllerAthena::ServerExecuteInventoryItem", Addresses::ServerExecuteInventoryItemVFT, ServerExecuteInventoryItem);
     Util::FHook("AFortPlayerControllerAthena::ServerAcknowledgePossession", Addresses::ServerAcknowledgePossession, ServerAcknowledgePossession);
     Util::FHook<AFortPlayerControllerAthena>("AFortPlayerControllerAthena::ServerLoadingScreenDropped", Addresses::ServerLoadingScreenDroppedVFT, ServerLoadingScreenDropped);
+    Util::FHook<AFortPlayerControllerAthena>("AFortPlayerControllerAthena::ServerCreateBuildingActor", Addresses::ServerCreateBuildingActorVFT, ServerCreateBuildingActor);
 #pragma endregion
 
 #pragma region AbilitySystemComponent
@@ -105,7 +106,8 @@ DWORD WINAPI Main(LPVOID)
     Util::FHook<UFortControllerComponent_Aircraft>("UFortControllerComponent_Aircraft::ServerAttemptAircraftJump", Addresses::ServerAttemptAircraftJumpVFT, ServerAttemptAircraftJump);
 #pragma endregion
 
-
+    if (bLategame)
+        Util::FHook("AFortGameModeAthena::OnAircraftEnteredDropZone", Addresses::OnAircraftEnteredDropZone, OnAircraftEnteredDropZone, DEFINE_OG(OnAircraftEnteredDropZoneOG));
 
     UKismetSystemLibrary::ExecuteConsoleCommand(GetWorld(), L"open Artemis_Terrain", nullptr);
     UKismetSystemLibrary::ExecuteConsoleCommand(GetWorld(), L"log LogFortUIDirector", nullptr);

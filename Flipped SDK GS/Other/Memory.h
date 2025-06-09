@@ -14,6 +14,7 @@ namespace Addresses {
 	const inline uint32_t ServerExecuteInventoryItemVFT = 0x22C;
 	const inline uint32_t ServerTryActivateAbilityWithEventDataVFT = 0x108;
 	const inline uint32_t ServerLoadingScreenDroppedVFT = 0x28E;
+	const inline uint32_t ServerCreateBuildingActorVFT = 0x1268 / 8;
 
 
 	const inline uint64_t GetMaxTickRate = 0xAED938;
@@ -48,11 +49,72 @@ namespace Addresses {
 
 	const inline uint32_t ServerAttemptAircraftJumpVFT = 0x4F0 / 8;
 
+	const inline uint64_t OnAircraftEnteredDropZone = 0x5F99274;
+
 	const inline std::vector<uint64_t> NullFunctions =
 	{
 		0x258D0DC // ChangeGamesessionId
 	};
 }
+
+template <typename StorageType, typename FuncType>
+struct TFunctionRefBase;
+
+template <typename StorageType, typename Ret, typename... ParamTypes>
+struct TFunctionRefBase<StorageType, Ret(ParamTypes...)>
+{
+	Ret(*Callable)(void*, ParamTypes&...);
+
+	StorageType Storage;
+};
+
+struct FFunctionStorage
+{
+	FFunctionStorage()
+		: HeapAllocation(nullptr)
+	{
+	}
+
+	void* HeapAllocation;
+};
+
+template <bool bUnique>
+struct TFunctionStorage : FFunctionStorage
+{
+};
+
+template <typename FuncType>
+class TFunction final : public TFunctionRefBase<TFunctionStorage<false>, FuncType>
+{
+};
+
+struct FActorSpawnParameters
+{
+	FName Name = FName(0);
+	UObject* Template = nullptr;
+	UObject* Owner = nullptr;
+	UObject** Instigator = nullptr;
+	UObject* OverrideLevel = nullptr;
+	UObject* OverrideParentComponent;
+	ESpawnActorCollisionHandlingMethod SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::Undefined;
+	uint8_t TransformScaleMethod;
+	uint16	bRemoteOwned : 1;
+	uint16	bNoFail : 1;
+	uint16	bDeferConstruction : 1;
+	uint16	bAllowDuringConstructionScript : 1;
+	enum class ESpawnActorNameMode : uint8_t
+	{
+		Required_Fatal,
+		Required_ErrorAndReturnNull,
+		Required_ReturnNull,
+		Requested
+	};
+
+	ESpawnActorNameMode NameMode;
+	EObjectFlags ObjectFlags;
+	TFunction<void(UObject*)> CustomPreSpawnInitalization; 
+};
+
 
 namespace Native {
 	inline UObject* (*StaticFindObject_)(UClass*, UObject*, const wchar_t*, bool)
@@ -93,4 +155,10 @@ namespace Native {
 
 	inline bool (*InternalTryActivateAbility)(UAbilitySystemComponent*, FGameplayAbilitySpecHandle, FPredictionKey, UGameplayAbility**, void*, const FGameplayEventData*)
 		= decltype(InternalTryActivateAbility)(Addresses::ImageBase + Addresses::InternalTryActivateAbility);
+
+	inline ABuildingSMActor* (*SpawnBuilding)(UWorld*, UClass* Class, FVector Location, FRotator Rotation, FActorSpawnParameters* SpawnParameters) 
+		= decltype(SpawnBuilding)(Addresses::ImageBase + 0x5C9DD24);
+
+	inline int (*CanPlaceBuildableClassInStructuralGrid)(UWorld*, UClass*, FVector Location, FRotator Rotation, bool bMirrored, TArray<ABuildingActor*>* ExistingBuildings, int* MarkerOptionalAdjustment)
+		= decltype(CanPlaceBuildableClassInStructuralGrid)(Addresses::ImageBase + 0x63FCF40);
 }

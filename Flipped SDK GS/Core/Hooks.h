@@ -6,6 +6,7 @@
 void (*DispatchRequestOG)(__int64, __int64, int); void DispatchRequest(__int64 a1, __int64 a2, int a3) { return DispatchRequestOG(a1, a2, 3); }
 void (*TickFlushOG)(UNetDriver*); void TickFlush(UNetDriver* Driver) { if (Driver && Driver->ReplicationDriver && Driver->ClientConnections.Num() > 0) Native::ServerReplicateActors(Driver->ReplicationDriver); TickFlushOG(Driver); }
 void (*StartNewSafeZonePhaseOG)(AFortGameModeAthena* GameMode, int32_t NewSafeZonePhase);
+void (*OnAircraftEnteredDropZoneOG)(AFortGameModeAthena* GameMode, AFortAthenaAircraft* Aircraft);
 
 static void NiggerPlaylist(AFortGameModeAthena* GameMode, UFortPlaylistAthena* Playlist) {
 	AFortGameStateAthena* GameState = Util::Cast<AFortGameStateAthena>(GameMode->GameState);
@@ -144,8 +145,6 @@ bool ReadyToStartMatch(AFortGameModeAthena* thisPtr)
 			}
 			WarmupActors.Free();
 
-
-
 			SET_TITLE("Flipped 19.10 - Listening!");
 		}
 
@@ -266,6 +265,8 @@ void StartNewSafeZonePhase(AFortGameModeAthena* GameMode, int32_t OverrideSafeZo
 	if (!GameState)
 		return StartNewSafeZonePhaseOG(GameMode, OverrideSafeZonePhase);
 
+	static int LategameSafeZonePhase = 2;
+
 	static UCurveTable* FortGameData = GameState->AthenaGameDataTable;
 	static FName ShrinkTimeFName = UKismetStringLibrary::Conv_StringToName(L"Default.SafeZone.ShrinkTime");
 	static FName HoldTimeFName = UKismetStringLibrary::Conv_StringToName(L"Default.SafeZone.WaitTime");
@@ -279,9 +280,24 @@ void StartNewSafeZonePhase(AFortGameModeAthena* GameMode, int32_t OverrideSafeZo
 			UDataTableFunctionLibrary::EvaluateCurveTableRow(FortGameData, HoldTimeFName, i, nullptr,
 				&GameState->MapInfo->SafeZoneDefinition.WaitTimeCached[i], {});
 		}
+		for (int i = 0; i < GameState->MapInfo->SafeZoneDefinition.ForceDistanceMinCached.Num(); i++) {
+			UDataTableFunctionLibrary::EvaluateCurveTableRow(GameState->MapInfo->SafeZoneDefinition.ForceDistanceMin.Curve.CurveTable,
+				GameState->MapInfo->SafeZoneDefinition.ForceDistanceMin.Curve.RowName, i, nullptr, &GameState->MapInfo->SafeZoneDefinition.ForceDistanceMinCached[i], {});
+		}
 	}
 
-	StartNewSafeZonePhaseOG(GameMode, OverrideSafeZonePhase);
+
+
+	if (bLategame) {
+		GameMode->SafeZonePhase = LategameSafeZonePhase;
+		GameState->SafeZonePhase = LategameSafeZonePhase;
+		StartNewSafeZonePhaseOG(GameMode, OverrideSafeZonePhase);
+		LategameSafeZonePhase++;
+	}
+	else
+	{
+		StartNewSafeZonePhaseOG(GameMode, OverrideSafeZonePhase);
+	}
 
 	float ChosenWaitTime = 0;
 
@@ -296,6 +312,12 @@ void StartNewSafeZonePhase(AFortGameModeAthena* GameMode, int32_t OverrideSafeZo
 		ShrinkingTime = GameState->MapInfo->SafeZoneDefinition.ShrinkTimeCached[GameMode->SafeZonePhase];
 
 	GameMode->SafeZoneIndicator->SafeZoneFinishShrinkTime = GameState->GetServerWorldTimeSeconds() + ShrinkingTime;
+
+	if (bLategame && (GameMode->SafeZonePhase == 2 || GameMode->SafeZonePhase == 3))
+	{
+		GameMode->SafeZoneIndicator->SafeZoneStartShrinkTime = GameState->GetServerWorldTimeSeconds();
+		GameMode->SafeZoneIndicator->SafeZoneFinishShrinkTime = GameState->GetServerWorldTimeSeconds() + 0.2;
+	}
 }
 
 void ServerAcknowledgePossession(AFortPlayerControllerAthena* thisPtr, AFortPlayerPawnAthena* P)
@@ -309,10 +331,15 @@ void ServerAcknowledgePossession(AFortPlayerControllerAthena* thisPtr, AFortPlay
 	if (!PlayerState)
 		return;
 
+	AFortGameModeAthena* GameMode = (AFortGameModeAthena*)UWorld::GetWorld()->AuthorityGameMode;
+
 	PlayerState->HeroType = thisPtr->CosmeticLoadoutPC.Character->HeroDefinition;
 	UFortKismetLibrary::UpdatePlayerCustomCharacterPartsVisualization(PlayerState);
 
-
+	if (bLategame && GameMode->SafeZonePhase > 2)
+	{
+		Inventory::AddItem(thisPtr, UFortKismetLibrary::K2_GetResourceItemDefinition(EFortResourceType::Wood), 500);
+	}
 }
 
 void ServerLoadingScreenDropped(AFortPlayerControllerAthena* thisPtr) 
@@ -505,6 +532,9 @@ void WaitForMatchAssignmentReady(UAthenaAIServicePlayerBots* thisPtr, __int64 Fl
 
 bool SpawnLoot(ABuildingContainer* Container) {
 
+	if (bLategame)
+		return false;
+
 	auto GameState = Util::Cast<AFortGameStateAthena>(UWorld::GetWorld()->GameState);
 	auto GameMode = Util::Cast<AFortGameModeAthena>(UWorld::GetWorld()->AuthorityGameMode);
 	if (!GameState || !GameMode || !Container || Container->bAlreadySearched)
@@ -551,4 +581,36 @@ void ServerAttemptAircraftJump(UFortControllerComponent_Aircraft* thisPtr, FRota
 	AFortGameModeAthena* GameMode = Util::Cast<AFortGameModeAthena>(UWorld::GetWorld()->AuthorityGameMode);
 
 	GameMode->RestartPlayer(Owner);
+
+
+}
+
+
+void OnAircraftEnteredDropZone(AFortGameModeAthena* GameMode, AFortAthenaAircraft* Aircraft)
+{
+	printf("OnAircraftEnteredDropZone\n");
+	AFortGameStateAthena* GameState = (AFortGameStateAthena*)GameMode->GameState;
+	FVector_NetQuantize100 SafeZoneLoc = (FVector_NetQuantize100)GameMode->SafeZoneLocations[4];
+	SafeZoneLoc.Z += 10000;
+	Aircraft->FlightInfo.FlightStartLocation = SafeZoneLoc;
+	Aircraft->FlightStartTime = 1;
+	Aircraft->FlightEndTime = 5;
+	GameState->bAircraftIsLocked = false;
+	Aircraft->FlightInfo.TimeTillDropStart = 2;
+	Aircraft->K2_TeleportTo(SafeZoneLoc, Aircraft->K2_GetActorRotation());
+	UKismetSystemLibrary::ExecuteConsoleCommand(UWorld::GetWorld(), L"skipaircraft", nullptr);
+	GameState->SafeZonesStartTime = 1;
+
+	OnAircraftEnteredDropZoneOG(GameMode, Aircraft);
+}
+
+void ServerCreateBuildingActor(AFortPlayerControllerAthena* Controller, FCreateBuildingActorData BuildingActorData) {
+	UClass* ClassToUse = BuildingActorData.BuildingClassData.BuildingClass.ClassPtr ? 
+		BuildingActorData.BuildingClassData.BuildingClass : Controller->BroadcastRemoteClientInfo->RemoteBuildableClass;
+
+	TArray<ABuildingActor*> ExistingBuildings;
+	if (Native::CanPlaceBuildableClassInStructuralGrid(UWorld::GetWorld(), ClassToUse, BuildingActorData.BuildLoc, BuildingActorData.BuildRot, BuildingActorData.bMirrored, &ExistingBuildings, nullptr) == 0 /*canadd*/) {
+
+		//Building->InitializeKismetSpawnedBuildingActor(Building, Controller, true, nullptr);
+	}
 }

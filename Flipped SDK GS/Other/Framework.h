@@ -30,6 +30,8 @@ enum EHookType
 	Patch
 };
 
+static constexpr int bLategame = 1;
+
 static int ReturnTrue() { return 1; }
 static void ReturnHook() { return; }
 
