@@ -1,6 +1,7 @@
 #pragma once
 
-namespace Addresses {
+namespace Addresses 
+{
 	const inline uint64_t ImageBase = (uint64_t)GetModuleHandle(NULL);
 
 	const inline uint64_t GIsClient = Addresses::ImageBase + 0xB30CF9F;
@@ -14,8 +15,16 @@ namespace Addresses {
 	const inline uint32_t ServerExecuteInventoryItemVFT = 0x22C;
 	const inline uint32_t ServerTryActivateAbilityWithEventDataVFT = 0x108;
 	const inline uint32_t ServerLoadingScreenDroppedVFT = 0x28E;
-	const inline uint32_t ServerCreateBuildingActorVFT = 0x1268 / 8;
 
+	const inline uint64_t SpawnLoot = 0x617CCBC;
+	const inline uint32_t ServerAttemptAircraftJumpVFT = 0x9E;
+	const inline uint64_t OnAircraftEnteredDropZone = 0x5F99274;
+
+	const inline uint32_t ServerCreateBuildingActorVFT = 0x24D;
+	const inline uint32_t ServerRepairBuildingActorVFT = 0x249;
+	const inline uint32_t ServerBeginEditingBuildingActorVFT = 0x254;
+	const inline uint32_t ServerEditBuildingActorVFT = 0x24F;
+	const inline uint32_t ServerEndEditingBuildingActorVFT = 0x252;
 
 	const inline uint64_t GetMaxTickRate = 0xAED938;
 	const inline uint64_t TickFlush = 0xBC72C0;
@@ -34,7 +43,7 @@ namespace Addresses {
 	const inline uint64_t GetInterfaceAddress = 0xB1B28C;
 	const inline uint64_t InternalTryActivateAbility = 0x4E02108;
 
-	const inline uint64_t OnGamePhaseStepChanged = 0x6A69F80; //AFortAthenaMutator_GiveItemsAtGamePhaseStep
+	const inline uint64_t OnGamePhaseStepChanged = 0x6A69F80; // AFortAthenaMutator_GiveItemsAtGamePhaseStep
 	
 	const inline uint64_t SpawnAI = 0x69D5510;
 	const inline uint64_t CreateAndConfigureNavigationSystem = 0x1F96F68;
@@ -44,12 +53,6 @@ namespace Addresses {
 	const inline uint64_t GameSessionPatch = 0x65B510F + 1;
 	const inline uint64_t FCommandLineGetCommandLine = 0xB71D9C;
 	const inline uint64_t ServicePermissionsByName = 0x17F5A4C;
-
-	const inline uint64_t SpawnLoot = 0x617CCBC;
-
-	const inline uint32_t ServerAttemptAircraftJumpVFT = 0x4F0 / 8;
-
-	const inline uint64_t OnAircraftEnteredDropZone = 0x5F99274;
 
 	const inline std::vector<uint64_t> NullFunctions =
 	{
@@ -116,7 +119,8 @@ struct FActorSpawnParameters
 };
 
 
-namespace Native {
+namespace Native 
+{
 	inline UObject* (*StaticFindObject_)(UClass*, UObject*, const wchar_t*, bool)
 		= decltype(StaticFindObject_)(Addresses::ImageBase + Addresses::StaticFindObject);
 
@@ -159,6 +163,9 @@ namespace Native {
 	inline ABuildingSMActor* (*SpawnBuilding)(UWorld*, UClass* Class, FVector Location, FRotator Rotation, FActorSpawnParameters* SpawnParameters) 
 		= decltype(SpawnBuilding)(Addresses::ImageBase + 0x5C9DD24);
 
-	inline int (*CanPlaceBuildableClassInStructuralGrid)(UWorld*, UClass*, FVector Location, FRotator Rotation, bool bMirrored, TArray<ABuildingActor*>* ExistingBuildings, int* MarkerOptionalAdjustment)
+	inline EFortStructuralGridQueryResults (*CanPlaceBuildableClassInStructuralGrid)(UWorld*, UClass*, FVector Location, FRotator Rotation, bool bMirrored, TArray<ABuildingActor*>* ExistingBuildings, int* MarkerOptionalAdjustment)
 		= decltype(CanPlaceBuildableClassInStructuralGrid)(Addresses::ImageBase + 0x63FCF40);
+
+	inline ABuildingSMActor* (*ReplaceBuildingActor)(ABuildingSMActor*, unsigned int, UObject*, int, int, char, AFortPlayerControllerAthena*)
+		= decltype(ReplaceBuildingActor)(Addresses::ImageBase + 0x61B1AB4);
 }

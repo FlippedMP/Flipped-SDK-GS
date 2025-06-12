@@ -12,21 +12,16 @@ DWORD WINAPI Main(LPVOID)
     *(bool*)(Addresses::GIsClient) = false;
     *(bool*)(Addresses::GIsServer) = true;
 
-    FLIPPED_LOG("ImageBase: ");
-    FLIPPED_LOG(uintptr_t(GetModuleHandle(0)));
-
-
-
-    Util::FHookBase::Initialize();
+    Util::FHookBase::Initialize(); // i moved the imagebase log in here!
 
 #pragma region GameSessionPatches
     Util::FHook("UFortGameInstance::GetServerAnalyticsProvider-PatchFix", Addresses::GameSessionPatch, 0x85);
-    Misc::Patch<uint8_t>(Addresses::ImageBase + 0x10268A1, 0x85);
-
+    Util::FHook("UnknownPatch - 1", 0x10268A1, 0x85); // adam name this if u remember what it is!
 #pragma endregion
 
 #pragma region CommandLine
-    if (bUsesGameSessions) {
+    if (bUsesGameSessions)
+    {
         Util::FHook("FCommandLine::Get", Addresses::FCommandLineGetCommandLine, FCommandLine_GetCommandLine, DEFINE_OG(GetCommandLineOG));
     }
 #pragma endregion
@@ -54,17 +49,26 @@ DWORD WINAPI Main(LPVOID)
     Util::FHook("AFortGameModeAthena::ReadyToStartMatch", Addresses::ReadyToStartMatch, ReadyToStartMatch);
     Util::FHook("AFortGameModeAthena::SpawnDefaultPawnFor", Addresses::SpawnDefaultPawnFor, SpawnDefaultPawnFor);
     Util::FHook("AFortGameModeAthena::StartNewSafeZonePhase", Addresses::StartNewSafeZonePhase, StartNewSafeZonePhase, DEFINE_OG(StartNewSafeZonePhaseOG));
+
     if (bUsesGameSessions) {
         Util::FHook<AFortGameModeAthena>("AFortGameModeAthena::GetGameSessionClass", Addresses::GetGameSessionClassVFT, GetGameSessionClass);
     }
 
+    if (bLategame) {
+        Util::FHook("AFortGameModeAthena::OnAircraftEnteredDropZone", Addresses::OnAircraftEnteredDropZone, OnAircraftEnteredDropZone, DEFINE_OG(OnAircraftEnteredDropZoneOG));
+    }
 #pragma endregion
 
 #pragma region FortPlayerControllerAthena
     Util::FHook<AFortPlayerControllerAthena>("AFortPlayerControllerAthena::ServerExecuteInventoryItem", Addresses::ServerExecuteInventoryItemVFT, ServerExecuteInventoryItem);
     Util::FHook("AFortPlayerControllerAthena::ServerAcknowledgePossession", Addresses::ServerAcknowledgePossession, ServerAcknowledgePossession);
     Util::FHook<AFortPlayerControllerAthena>("AFortPlayerControllerAthena::ServerLoadingScreenDropped", Addresses::ServerLoadingScreenDroppedVFT, ServerLoadingScreenDropped);
-    Util::FHook<AFortPlayerControllerAthena>("AFortPlayerControllerAthena::ServerCreateBuildingActor", Addresses::ServerCreateBuildingActorVFT, ServerCreateBuildingActor);
+
+    Util::FHook<AFortPlayerControllerAthena>("AFortPlayerControllerAthena::ServerCreateBuildingActor", Addresses::ServerCreateBuildingActorVFT, ServerCreateBuildingActor, DEFINE_OG(ServerCreateBuildingActorOG));
+    Util::FHook<AFortPlayerControllerAthena>("AFortPlayerControllerAthena::ServerEditBuildingActor", Addresses::ServerEditBuildingActorVFT, ServerEditBuildingActor, DEFINE_OG(ServerEditBuildingActorOG));
+    Util::FHook<AFortPlayerControllerAthena>("AFortPlayerControllerAthena::ServerRepairBuildingActor", Addresses::ServerRepairBuildingActorVFT, ServerRepairBuildingActor, DEFINE_OG(ServerRepairBuildingActorOG));
+    Util::FHook<AFortPlayerControllerAthena>("AFortPlayerControllerAthena::ServerBeginEditingBuildingActor", Addresses::ServerBeginEditingBuildingActorVFT, ServerBeginEditingBuildingActor, DEFINE_OG(ServerBeginEditingBuildingActorOG));
+    Util::FHook<AFortPlayerControllerAthena>("AFortPlayerControllerAthena::ServerEndEditingBuildingActor", Addresses::ServerEndEditingBuildingActorVFT, ServerEndEditingBuildingActor, DEFINE_OG(ServerEndEditingBuildingActorOG));
 #pragma endregion
 
 #pragma region AbilitySystemComponent
@@ -79,35 +83,30 @@ DWORD WINAPI Main(LPVOID)
 
 #pragma region AthenaAIServicePlayerBots
     /*
-    MH_CreateHook(LPVOID(Addresses::ImageBase + Addresses::SpawnAI), execSpawnAI, nullptr);
-    MH_EnableHook(LPVOID(Addresses::ImageBase + Addresses::SpawnAI));
-     */
+        MH_CreateHook(LPVOID(Addresses::ImageBase + Addresses::SpawnAI), execSpawnAI, nullptr);
+        MH_EnableHook(LPVOID(Addresses::ImageBase + Addresses::SpawnAI));
+    */
 
-    Misc::Patch<uint32_t>(Addresses::ImageBase + 0x5EE0507, 0x1C4C899); //0x7B2CDA4 - (0x5EE0504 + 7)
+    Util::FHook("UnknownPatch - 2", 0x5EE0507, 0x1C4C899); // 0x7B2CDA4 - (0x5EE0504 + 7)
     MH_CreateHook(LPVOID(Addresses::ImageBase + 0x7B2CDA4), InitalizeMMRInfos, nullptr);
     MH_EnableHook(LPVOID(Addresses::ImageBase + 0x7B2CDA4));
 
-    //Util::FHook("UAthenaAIServicePlayerBots::WaitForMatchAssignmentReady", uint64(0x5EE9524), WaitForMatchAssignmentReady, DEFINE_OG(WaitForMatchAssignmentReadyOG));
-
+    // Util::FHook("UAthenaAIServicePlayerBots::WaitForMatchAssignmentReady", uint64(0x5EE9524), WaitForMatchAssignmentReady, DEFINE_OG(WaitForMatchAssignmentReadyOG));
 #pragma endregion
 
 #pragma region BuildingContainer
     Util::FHook("ABuldingContainer::SpawnLoot", Addresses::SpawnLoot, SpawnLoot);
 #pragma endregion
 
-
-    if (bUsesGameSessions) {
 #pragma region ServiceConfigMcp
+    if (bUsesGameSessions) {
         Util::FHook("FServiceConfigMcp::GetServicePermissionsByName", Addresses::ServicePermissionsByName, GetServicePermissionsByName);
-#pragma endregion
     }
+#pragma endregion
 
 #pragma region FortControllerComponent_Aircraft
     Util::FHook<UFortControllerComponent_Aircraft>("UFortControllerComponent_Aircraft::ServerAttemptAircraftJump", Addresses::ServerAttemptAircraftJumpVFT, ServerAttemptAircraftJump);
 #pragma endregion
-
-    if (bLategame)
-        Util::FHook("AFortGameModeAthena::OnAircraftEnteredDropZone", Addresses::OnAircraftEnteredDropZone, OnAircraftEnteredDropZone, DEFINE_OG(OnAircraftEnteredDropZoneOG));
 
     UKismetSystemLibrary::ExecuteConsoleCommand(GetWorld(), L"open Artemis_Terrain", nullptr);
     UKismetSystemLibrary::ExecuteConsoleCommand(GetWorld(), L"log LogFortUIDirector", nullptr);
@@ -131,16 +130,12 @@ DWORD WINAPI Main(LPVOID)
     return 0;
 }
 
-BOOL APIENTRY DllMain(HMODULE hModule,
-    DWORD  ul_reason_for_call,
-    LPVOID lpReserved
-)
+BOOL APIENTRY DllMain(HMODULE, DWORD Reason, LPVOID)
 {
-    switch (ul_reason_for_call)
+    switch (Reason)
     {
-    case DLL_PROCESS_ATTACH:
-        CreateThread(0, 0, Main, 0, 0, 0);
-        break;
+        case DLL_PROCESS_ATTACH: CreateThread(0, 0, Main, 0, 0, 0); break;
     }
+
     return TRUE;
 }

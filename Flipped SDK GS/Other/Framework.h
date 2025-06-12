@@ -22,15 +22,15 @@ using namespace SDK;
 static FName NAME_GameNetDriver = UKismetStringLibrary::Conv_StringToName(L"GameNetDriver");
 
 static bool bUsesGameSessions = false;
+static constexpr bool bLategame = true;
 
 enum EHookType
 {
 	Normal,
 	Virtual,
-	Patch
+	Patch,
+	ModifyInstruction
 };
-
-static constexpr int bLategame = 1;
 
 static int ReturnTrue() { return 1; }
 static void ReturnHook() { return; }
@@ -54,6 +54,7 @@ namespace Util
 	public:
 		static bool Initialize()
 		{
+			std::cout << "ImageBase: " << std::hex << uintptr_t(GetModuleHandle(0)) << "\n";
 			return (MH_Initialize() == MH_OK);
 		}
 	};
@@ -66,6 +67,8 @@ namespace Util
 		void** VTable = nullptr;
 		uint32_t Index = 0;
 		uint64_t Address = 0;
+		uint8_t Byte = 0;
+		uint64_t Instruction = 0;
 		EHookType Type = Normal;
 		void** OG = nullptr;
 		std::string HookName;
@@ -90,12 +93,32 @@ namespace Util
 			MH_EnableHook((LPVOID)_Address);
 		}
 
-		static void Patch(uintptr_t ptr, uint8_t byte)
+		void PatchInternal(uint64_t _Address, uint8_t _Byte)
 		{
-			DWORD og;
-			VirtualProtect(LPVOID(ptr), sizeof(byte), PAGE_EXECUTE_READWRITE, &og);
-			*(uint8_t*)ptr = byte;
-			VirtualProtect(LPVOID(ptr), sizeof(byte), og, &og);
+			DWORD oldProtect;
+			VirtualProtect(LPVOID(_Address), sizeof(_Byte), PAGE_EXECUTE_READWRITE, &oldProtect);
+
+			*(uint8_t*)_Address = _Byte;
+
+			VirtualProtect(LPVOID(_Address), sizeof(_Byte), oldProtect, &oldProtect);
+		}
+
+		void ModifyInstructionInternal(uintptr_t _Instruction, uintptr_t _NewAddress)
+		{
+			uint8_t* InstructionAddr = (uint8_t*)_Instruction;
+			uint8_t* NewAddr = (uint8_t*)_NewAddress;
+
+			int64_t Relative = (int64_t)(NewAddr - (InstructionAddr + 5));
+
+			int32_t* addr = reinterpret_cast<int32_t*>(InstructionAddr + 1);
+
+			DWORD dwProtection;
+			VirtualProtect(addr, sizeof(int32_t), PAGE_EXECUTE_READWRITE, &dwProtection);
+
+			*addr = static_cast<int32_t>(Relative);
+
+			DWORD dwTemp;
+			VirtualProtect(addr, sizeof(int32_t), dwProtection, &dwTemp);
 		}
 
 	public:
@@ -135,12 +158,22 @@ namespace Util
 			HookInternal(Address, Detour, OG);
 		}
 
-		FHook(std::string _PatchName, uint64_t _Address, uint8_t Byte) {
+		FHook(std::string _PatchName, uint64_t _Address, uint8_t _Byte) {
 			HookName = _PatchName;
 			Type = EHookType::Patch;
 			Address = Addresses::ImageBase + _Address;
+			Byte = _Byte;
 
-			Patch(Address, Byte);
+			PatchInternal(Address, Byte);
+		}
+
+		FHook(std::string _ModInstructionName, uintptr_t _Instruction, uintptr_t _NewAddress) {
+			HookName = _ModInstructionName;
+			Type = EHookType::ModifyInstruction;
+			Address = Addresses::ImageBase + _NewAddress;
+			Instruction = _Instruction;
+
+			ModifyInstructionInternal(_Instruction, _NewAddress);
 		}
 	};
 }
@@ -170,6 +203,32 @@ namespace Misc
 			return nullptr;
 
 		return Util::Cast<T>(FinishingNewActor);
+	}
+
+	template <typename T>
+	__forceinline std::vector<T*> GetAllActorsOfClass()
+	{
+		TArray<AActor*> Actors;
+		std::vector<AActor*> ActorsVector;
+		UGameplayStatics::GetAllActorsOfClass(GetWorld(), T::StaticClass(), &Actors);
+
+		if (Actors.Num() == 0)
+		{
+			FLIPPED_LOG("UGameplayStatics::GetAllActorsOfClass returned 0 actors! Returning empty vector.");
+			return ActorsVector;
+		}
+
+		ActorsVector.reserve(Actors.Num());
+		for (AActor*& CurrentActor : Actors)
+		{
+			if (!CurrentActor)
+				continue;
+
+			ActorsVector.push_back(CurrentActor);
+		}
+
+		Actors.Free();
+		return ActorsVector;
 	}
 
 	float RandRange(float min, float max) {
@@ -209,19 +268,25 @@ namespace Misc
 		return ArrayOfObjects;
 	}
 
-	UCurveTable* GetGameData() {
+	UCurveTable* GetGameData()
+	{
 		return Native::StaticFindObject<UCurveTable>("/Game/Athena/Balance/DataTables/AthenaGameData.AthenaGameData");
 	}
 
-	void ApplyDataTablePatch(UDataTable* DataTable) {
-		if (!DataTable) return;
+	void ApplyDataTablePatch(UDataTable* DataTable)
+	{
+		if (!DataTable)
+			return;
+
 		TArray<AActor*> Actors;
 		UGameplayStatics::GetAllActorsOfClass(UWorld::GetWorld(), UFortWeaponRangedItemDefinition::StaticClass(), &Actors);
+
 		for (AActor* Actor : Actors) {
 			UFortWeaponRangedItemDefinition* RangedItemDefinition = reinterpret_cast<UFortWeaponRangedItemDefinition*>(Actor);
 			if (RangedItemDefinition) {
 				FFortRangedWeaponStats WeaponStats;
 				UDataTableFunctionLibrary::GetDataTableRowFromName(DataTable, RangedItemDefinition->GetWeaponStatHandle().RowName, &WeaponStats);
+
 				WeaponStats.KnockbackMagnitude = 0.0;
 				WeaponStats.MidRangeKnockbackMagnitude = 0.0;
 				WeaponStats.LongRangeKnockbackMagnitude = 0.0;
@@ -232,36 +297,9 @@ namespace Misc
 		Actors.Free();
 	}
 
-	UFortPlaylistAthena* CurrentPlaylist()
+	UFortPlaylistAthena* GetCurrentPlaylist()
 	{
-		return Util::Cast<AFortGameStateAthena>(UWorld::GetWorld()->GameState)->CurrentPlaylistInfo.BasePlaylist;
-	}
-
-	static void ModifyInstruction_Internal(uintptr_t Instruction, uintptr_t NewAddress)
-	{
-		uint8_t* InstructionAddr = (uint8_t*)Instruction;
-		uint8_t* NewAddr = (uint8_t*)NewAddress;
-
-		int64_t Relative = (int64_t)(NewAddr - (InstructionAddr + 5));
-
-		int32_t* addr = reinterpret_cast<int32_t*>(InstructionAddr + 1);
-
-		DWORD dwProtection;
-		VirtualProtect(addr, sizeof(int32_t), PAGE_EXECUTE_READWRITE, &dwProtection);
-
-		*addr = static_cast<int32_t>(Relative);
-
-		DWORD dwTemp;
-		VirtualProtect(addr, sizeof(int32_t), dwProtection, &dwTemp);
-	}
-
-	template <typename _Is>
-	static __forceinline void Patch(uintptr_t ptr, _Is byte)
-	{
-		DWORD og;
-		VirtualProtect(LPVOID(ptr), sizeof(_Is), PAGE_EXECUTE_READWRITE, &og);
-		*(_Is*)ptr = byte;
-		VirtualProtect(LPVOID(ptr), sizeof(_Is), og, &og);
+		return Util::Cast<AFortGameStateAthena>(GetWorld()->GameState)->CurrentPlaylistInfo.BasePlaylist;
 	}
 }
 
@@ -303,7 +341,6 @@ public:
 	FString Id;
 	FString Key;
 };
-
 
 template<typename UEType>
 UEType* SDK::TSoftObjectPtr<UEType>::NewGet() const

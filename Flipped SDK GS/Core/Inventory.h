@@ -32,9 +32,10 @@ namespace Inventory
 		}
 	}
 
-	void AddItem(AFortPlayerControllerAthena* Controller, UFortItemDefinition* Definition, int Count = 1, int LoadedAmmo = 0) {
-		if (!Controller || !Definition)
-			return;
+	/* this needs WAY more checks but my brain power isnt enough anymore to do good inv funcs, maybe ill paste for an old gs */
+	UFortWorldItem* AddItem(AFortPlayerControllerAthena* Controller, UFortItemDefinition* Definition, int Count = 1, int LoadedAmmo = 0) {
+		if (!Controller || !Controller->WorldInventory || !Definition)
+			return nullptr;
 
 		bool bItemExists = false;
 		for (size_t i = 0; i < Controller->WorldInventory->Inventory.ReplicatedEntries.Num(); i++) {
@@ -59,14 +60,16 @@ namespace Inventory
 				Controller->WorldInventory->Inventory.ReplicatedEntries.Add(Item->ItemEntry);
 				UpdateInventory(Controller, &Item->ItemEntry);
 
-				return;
+				return Item;
 			}
-			else {
-				std::cout << "Failed to create item with definition: " << Definition->GetFullName() << std::endl;
-				return;
+			else 
+			{
+				FLIPPED_LOG("Failed to create item with definition: " + Definition->GetFullName());
+				return nullptr;
 			}
 		}
-		else {
+		else 
+		{
 			if (Definition->IsStackable())
 				UpdateEntry(Controller, Definition, Count, LoadedAmmo);
 		}
@@ -77,7 +80,7 @@ namespace Inventory
 			return;
 
 		for (size_t i = 0; i < Controller->WorldInventory->Inventory.ReplicatedEntries.Num(); i++) {
-			auto& Entry = Controller->WorldInventory->Inventory.ReplicatedEntries[i];
+			FFortItemEntry& Entry = Controller->WorldInventory->Inventory.ReplicatedEntries[i];
 			if (Entry.ItemDefinition == Definition) {
 				if (Count == -1) {
 					Controller->WorldInventory->Inventory.ReplicatedEntries.Remove(i);
@@ -105,6 +108,57 @@ namespace Inventory
 								return;
 
 							if (Instance->ItemEntry.ItemDefinition == Definition) {
+								Controller->WorldInventory->Inventory.ItemInstances.Remove(j);
+								Controller->WorldInventory->Inventory.MarkArrayDirty();
+								break;
+							}
+						}
+
+						return;
+					}
+					else {
+						Entry.PreviousCount = Entry.Count;
+						Entry.Count -= Count;
+						UpdateInventory(Controller, &Entry);
+					}
+				}
+			}
+		}
+	}
+
+	void RemoveItem(AFortPlayerControllerAthena* Controller, FGuid ItemGUID, int Count = -1) {
+		if (!Controller)
+			return;
+
+		for (size_t i = 0; i < Controller->WorldInventory->Inventory.ReplicatedEntries.Num(); i++) {
+			auto& Entry = Controller->WorldInventory->Inventory.ReplicatedEntries[i];
+			if (Entry.ItemGuid == ItemGUID) {
+				if (Count == -1) {
+					Controller->WorldInventory->Inventory.ReplicatedEntries.Remove(i);
+					Controller->WorldInventory->Inventory.MarkArrayDirty();
+					for (size_t j = 0; j < Controller->WorldInventory->Inventory.ItemInstances.Num(); j++) {
+						auto& Instance = Controller->WorldInventory->Inventory.ItemInstances[j];
+						if (!Instance && j == Controller->WorldInventory->Inventory.ItemInstances.Num() - 1)
+							return;
+
+						if (Instance->ItemEntry.ItemGuid == ItemGUID) {
+							Controller->WorldInventory->Inventory.ItemInstances.Remove(j);
+							Controller->WorldInventory->Inventory.MarkArrayDirty();
+							break;
+						}
+					}
+
+					return;
+				}
+				else {
+					if (Entry.Count - Count <= 0) {
+						Controller->WorldInventory->Inventory.ReplicatedEntries.Remove(i);
+						for (size_t j = 0; j < Controller->WorldInventory->Inventory.ItemInstances.Num(); j++) {
+							auto& Instance = Controller->WorldInventory->Inventory.ItemInstances[j];
+							if (!Instance && j == Controller->WorldInventory->Inventory.ItemInstances.Num() - 1)
+								return;
+
+							if (Instance->ItemEntry.ItemGuid == ItemGUID) {
 								Controller->WorldInventory->Inventory.ItemInstances.Remove(j);
 								Controller->WorldInventory->Inventory.MarkArrayDirty();
 								break;

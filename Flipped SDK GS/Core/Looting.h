@@ -10,7 +10,7 @@ struct FSpawnPickupData
     bool bRandomRotation = Rotation == FRotator(0, 0, 0);
     int Count = 1;
     int LoadedAmmo = -1;
-    AFortPawn* ItemOwner = nullptr;
+    AFortPawn* PickupOwner = nullptr;
     EFortPickupSourceTypeFlag FortPickupSourceTypeFlag = EFortPickupSourceTypeFlag::Tossed;
     EFortPickupSpawnSource FortPickupSpawnSource = EFortPickupSpawnSource::Unset;
 };
@@ -47,7 +47,7 @@ namespace Looting
         bool bRandomRotation = SpawnPickupData.bRandomRotation;
         int Count = SpawnPickupData.Count;
         int LoadedAmmo = SpawnPickupData.LoadedAmmo;
-        AFortPawn* ItemOwner = SpawnPickupData.ItemOwner;
+        AFortPawn* PickupOwner = SpawnPickupData.PickupOwner;
         EFortPickupSourceTypeFlag FortPickupSourceTypeFlag = SpawnPickupData.FortPickupSourceTypeFlag;
         EFortPickupSpawnSource FortPickupSpawnSource = SpawnPickupData.FortPickupSpawnSource;
 
@@ -56,7 +56,7 @@ namespace Looting
 
         if (AFortPickupAthena* NewPickup = Misc::SpawnActor<AFortPickupAthena>(Location, Rotation))
         {
-            NewPickup->PawnWhoDroppedPickup = ItemOwner;
+            NewPickup->PawnWhoDroppedPickup = PickupOwner;
             NewPickup->PrimaryPickupItemEntry.ItemDefinition = ItemDefinition;
             NewPickup->PrimaryPickupItemEntry.Count = Count;
 
@@ -68,7 +68,13 @@ namespace Looting
 
             NewPickup->bRandomRotation = bRandomRotation;
 
-            NewPickup->TossPickup(Location, ItemOwner, 0, true, false, FortPickupSourceTypeFlag, FortPickupSpawnSource);
+            if (PickupOwner && (FortPickupSourceTypeFlag == EFortPickupSourceTypeFlag::Player && FortPickupSpawnSource == EFortPickupSpawnSource::TossedByPlayer))
+                Location += PickupOwner->GetActorForwardVector() * 500.0f;
+
+            NewPickup->SetReplicateMovement(true);
+            NewPickup->OnRep_ReplicateMovement();
+            NewPickup->MovementComponent = Util::Cast<UProjectileMovementComponent>(UGameplayStatics::SpawnObject(UProjectileMovementComponent::StaticClass(), NewPickup));
+            NewPickup->TossPickup(Location, PickupOwner, 0, true, false, FortPickupSourceTypeFlag, FortPickupSpawnSource);
 
             return NewPickup;
         }
@@ -118,7 +124,7 @@ namespace Looting
 
     void BuildLootTables(TArray<UDataTable*>* OutTierDataTables, TArray<UDataTable*>* OutLootPackageTables)
     {
-        static UFortPlaylistAthena* LoadedPlaylist = Misc::CurrentPlaylist();
+        static UFortPlaylistAthena* LoadedPlaylist = Misc::GetCurrentPlaylist();
         if (!LoadedPlaylist)
             return;
 
