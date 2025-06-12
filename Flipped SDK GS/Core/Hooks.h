@@ -616,7 +616,7 @@ void OnAircraftEnteredDropZone(AFortGameModeAthena* thisPtr, AFortAthenaAircraft
 	OnAircraftEnteredDropZoneOG(thisPtr, Aircraft);
 }
 
-void (*ServerCreateBuildingActorOG)(AFortPlayerControllerAthena*, FCreateBuildingActorData&);
+
 void ServerCreateBuildingActor(AFortPlayerControllerAthena* thisPtr, FCreateBuildingActorData& BuildingData) {
 	if (!thisPtr || !thisPtr->Pawn || !thisPtr->PlayerState || thisPtr->IsInAircraft()) return;
 	APawn* Pawn = thisPtr->Pawn;
@@ -644,8 +644,9 @@ void ServerCreateBuildingActor(AFortPlayerControllerAthena* thisPtr, FCreateBuil
 		return ServerCreateBuildingActorOG(thisPtr, BuildingData);
 
 	TArray<ABuildingActor*> ExistingBuildings;
+	char dih = 0;
 	bool bCanBuild =
-		Native::CanPlaceBuildableClassInStructuralGrid(GetWorld(), BuildingClass, Location, Rotation, bMirrored, &ExistingBuildings, nullptr)
+		Native::CanPlaceBuildableClassInStructuralGrid(GetWorld(), BuildingClass, Location, Rotation, bMirrored, &ExistingBuildings, &dih)
 		== EFortStructuralGridQueryResults::CanAdd;
 
 	if (!bCanBuild)

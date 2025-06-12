@@ -103,6 +103,16 @@ namespace Util
 			VirtualProtect(LPVOID(_Address), sizeof(_Byte), oldProtect, &oldProtect);
 		}
 
+		void PatchInternal(uint64_t _Address, uint32_t _Byte)
+		{
+			DWORD oldProtect;
+			VirtualProtect(LPVOID(_Address), sizeof(_Byte), PAGE_EXECUTE_READWRITE, &oldProtect);
+
+			*(uint8_t*)_Address = _Byte;
+
+			VirtualProtect(LPVOID(_Address), sizeof(_Byte), oldProtect, &oldProtect);
+		}
+
 		void ModifyInstructionInternal(uintptr_t _Instruction, uintptr_t _NewAddress)
 		{
 			uint8_t* InstructionAddr = (uint8_t*)_Instruction;
@@ -159,6 +169,15 @@ namespace Util
 		}
 
 		FHook(std::string _PatchName, uint64_t _Address, uint8_t _Byte) {
+			HookName = _PatchName;
+			Type = EHookType::Patch;
+			Address = Addresses::ImageBase + _Address;
+			Byte = _Byte;
+
+			PatchInternal(Address, Byte);
+		}
+
+		FHook(std::string _PatchName, uint64_t _Address, uint32_t _Byte) {
 			HookName = _PatchName;
 			Type = EHookType::Patch;
 			Address = Addresses::ImageBase + _Address;

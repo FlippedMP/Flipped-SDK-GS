@@ -15,8 +15,8 @@ DWORD WINAPI Main(LPVOID)
     Util::FHookBase::Initialize(); // i moved the imagebase log in here!
 
 #pragma region GameSessionPatches
-    Util::FHook("UFortGameInstance::GetServerAnalyticsProvider-PatchFix", Addresses::GameSessionPatch, 0x85);
-    Util::FHook("UnknownPatch - 1", 0x10268A1, 0x85); // adam name this if u remember what it is!
+    Util::FHook("UFortGameInstance::GetServerAnalyticsProvider-PatchFix", Addresses::GameSessionPatch, uint8_t(0x85));
+    Util::FHook("UnknownPatch - 1", 0x10268A1, uint8_t(0x85)); // adam name this if u remember what it is!
 #pragma endregion
 
 #pragma region CommandLine
@@ -87,7 +87,7 @@ DWORD WINAPI Main(LPVOID)
         MH_EnableHook(LPVOID(Addresses::ImageBase + Addresses::SpawnAI));
     */
 
-    Util::FHook("UnknownPatch - 2", 0x5EE0507, 0x1C4C899); // 0x7B2CDA4 - (0x5EE0504 + 7)
+    Util::FHook("UnknownPatch - 2", 0x5EE0507, uint32_t(0x1C4C899)); // 0x7B2CDA4 - (0x5EE0504 + 7)
     MH_CreateHook(LPVOID(Addresses::ImageBase + 0x7B2CDA4), InitalizeMMRInfos, nullptr);
     MH_EnableHook(LPVOID(Addresses::ImageBase + 0x7B2CDA4));
 

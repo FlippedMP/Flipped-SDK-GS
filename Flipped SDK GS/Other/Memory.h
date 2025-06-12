@@ -81,42 +81,7 @@ struct FFunctionStorage
 	void* HeapAllocation;
 };
 
-template <bool bUnique>
-struct TFunctionStorage : FFunctionStorage
-{
-};
 
-template <typename FuncType>
-class TFunction final : public TFunctionRefBase<TFunctionStorage<false>, FuncType>
-{
-};
-
-struct FActorSpawnParameters
-{
-	FName Name = FName(0);
-	UObject* Template = nullptr;
-	UObject* Owner = nullptr;
-	UObject** Instigator = nullptr;
-	UObject* OverrideLevel = nullptr;
-	UObject* OverrideParentComponent;
-	ESpawnActorCollisionHandlingMethod SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::Undefined;
-	uint8_t TransformScaleMethod;
-	uint16	bRemoteOwned : 1;
-	uint16	bNoFail : 1;
-	uint16	bDeferConstruction : 1;
-	uint16	bAllowDuringConstructionScript : 1;
-	enum class ESpawnActorNameMode : uint8_t
-	{
-		Required_Fatal,
-		Required_ErrorAndReturnNull,
-		Required_ReturnNull,
-		Requested
-	};
-
-	ESpawnActorNameMode NameMode;
-	EObjectFlags ObjectFlags;
-	TFunction<void(UObject*)> CustomPreSpawnInitalization; 
-};
 
 
 namespace Native 
@@ -160,10 +125,7 @@ namespace Native
 	inline bool (*InternalTryActivateAbility)(UAbilitySystemComponent*, FGameplayAbilitySpecHandle, FPredictionKey, UGameplayAbility**, void*, const FGameplayEventData*)
 		= decltype(InternalTryActivateAbility)(Addresses::ImageBase + Addresses::InternalTryActivateAbility);
 
-	inline ABuildingSMActor* (*SpawnBuilding)(UWorld*, UClass* Class, FVector Location, FRotator Rotation, FActorSpawnParameters* SpawnParameters) 
-		= decltype(SpawnBuilding)(Addresses::ImageBase + 0x5C9DD24);
-
-	inline EFortStructuralGridQueryResults (*CanPlaceBuildableClassInStructuralGrid)(UWorld*, UClass*, FVector Location, FRotator Rotation, bool bMirrored, TArray<ABuildingActor*>* ExistingBuildings, int* MarkerOptionalAdjustment)
+	inline EFortStructuralGridQueryResults (*CanPlaceBuildableClassInStructuralGrid)(UObject*, UObject*, FVector Location, FRotator Rotation, bool bMirrored, TArray<ABuildingActor*>* ExistingBuildings, char* MarkerOptionalAdjustment)
 		= decltype(CanPlaceBuildableClassInStructuralGrid)(Addresses::ImageBase + 0x63FCF40);
 
 	inline ABuildingSMActor* (*ReplaceBuildingActor)(ABuildingSMActor*, unsigned int, UObject*, int, int, char, AFortPlayerControllerAthena*)
