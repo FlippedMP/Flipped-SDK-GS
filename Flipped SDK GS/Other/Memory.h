@@ -55,6 +55,9 @@ namespace Addresses
 	const inline uint64_t FCommandLineGetCommandLine = 0xB71D9C;
 	const inline uint64_t ServicePermissionsByName = 0x17F5A4C;
 
+	const inline uint64_t TeleportPlayer = 0x6a478d8;
+	const inline uint32_t ServerGiveCreativeItemVFT = 0x4E8;
+
 	const inline std::vector<uint64_t> NullFunctions =
 	{
 		0x258D0DC // ChangeGamesessionId
@@ -131,4 +134,10 @@ namespace Native
 
 	inline ABuildingSMActor* (*ReplaceBuildingActor)(ABuildingSMActor*, unsigned int, UObject*, int, int, char, AFortPlayerControllerAthena*)
 		= decltype(ReplaceBuildingActor)(Addresses::ImageBase + 0x61B1AB4);
+
+	inline void (*UpdateStatus)(AFortAthenaCreativePortal*) 
+		= decltype(UpdateStatus)(Addresses::ImageBase + 0x5F1C72C);
+
+	inline void (*LoadPlayset)(UPlaysetLevelStreamComponent*)
+		= decltype(LoadPlayset)(Addresses::ImageBase + 0x67C1CAC);
 }

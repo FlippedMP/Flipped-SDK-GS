@@ -22,7 +22,8 @@ using namespace SDK;
 static FName NAME_GameNetDriver = UKismetStringLibrary::Conv_StringToName(L"GameNetDriver");
 
 static bool bUsesGameSessions = false;
-static constexpr bool bLategame = true;
+static constexpr bool bLategame = false;
+static constexpr bool bCreative = true;
 
 enum EHookType
 {

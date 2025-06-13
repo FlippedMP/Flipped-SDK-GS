@@ -38,6 +38,8 @@ DWORD WINAPI Main(LPVOID)
 
 	Util::FHook<UObject>("UObject::CanCreateInCurrentConext", uint32(0x100 / 8), ReturnTrue);
 
+    Util::FHook("UObject::ProcessEvent", uint64_t(Offsets::ProcessEvent), ProcessEvent, DEFINE_OG(ProcessEventOG));
+
     int NullCount = 0; // i refuse to use c style loops for this nigga
     for (uint64_t Address : Addresses::NullFunctions)
     {
@@ -71,6 +73,7 @@ DWORD WINAPI Main(LPVOID)
     Util::FHook<AFortPlayerControllerAthena>("AFortPlayerControllerAthena::ServerRepairBuildingActor", Addresses::ServerRepairBuildingActorVFT, ServerRepairBuildingActor, DEFINE_OG(ServerRepairBuildingActorOG));
     Util::FHook<AFortPlayerControllerAthena>("AFortPlayerControllerAthena::ServerBeginEditingBuildingActor", Addresses::ServerBeginEditingBuildingActorVFT, ServerBeginEditingBuildingActor, DEFINE_OG(ServerBeginEditingBuildingActorOG));
     Util::FHook<AFortPlayerControllerAthena>("AFortPlayerControllerAthena::ServerEndEditingBuildingActor", Addresses::ServerEndEditingBuildingActorVFT, ServerEndEditingBuildingActor, DEFINE_OG(ServerEndEditingBuildingActorOG));
+    Util::FHook<AFortPlayerControllerAthena>("AFortPlayerControllerAthena::ServerGiveCreativeItem", Addresses::ServerGiveCreativeItemVFT, ServerGiveCreativeItem);
 #pragma endregion
 
 #pragma region AbilitySystemComponent
@@ -110,7 +113,17 @@ DWORD WINAPI Main(LPVOID)
     Util::FHook<UFortControllerComponent_Aircraft>("UFortControllerComponent_Aircraft::ServerAttemptAircraftJump", Addresses::ServerAttemptAircraftJumpVFT, ServerAttemptAircraftJump);
 #pragma endregion
 
-    UKismetSystemLibrary::ExecuteConsoleCommand(GetWorld(), L"open Artemis_Terrain", nullptr);
+#pragma region FortAthenaCreativePortal
+    UFunction* Func = UObject::FindObject<UFunction>("Function FortniteGame.FortAthenaCreativePortal.TeleportPlayerToLinkedVolume");
+    UFunction* Func2 = UObject::FindObject<UFunction>("Function Engine.PlayerController.OnServerStartedVisualLogger");
+    Func->ExecFunction = Func2->ExecFunction;
+    Util::FHook("AFortAthenaCreativePortal::TeleportPlayerToLinkedVolume", (uint64_t(Func2->ExecFunction) - Addresses::ImageBase), TeleportPlayerToLinkedVolume);
+
+#pragma endregion
+
+    FString MapName = bCreative ? L"open Creative_NoApollo_Terrain" : L"open Artemis_Terrain";
+
+    UKismetSystemLibrary::ExecuteConsoleCommand(GetWorld(), MapName, nullptr);
     UKismetSystemLibrary::ExecuteConsoleCommand(GetWorld(), L"log LogFortUIDirector", nullptr);
     UKismetSystemLibrary::ExecuteConsoleCommand(GetWorld(), L"log LogQos", nullptr);
     UKismetSystemLibrary::ExecuteConsoleCommand(GetWorld(), L"log LogFortInventory all", nullptr);
