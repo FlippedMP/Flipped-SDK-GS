@@ -197,6 +197,19 @@ namespace Util
 	};
 }
 
+struct FLategameLoadout
+{
+	UFortItemDefinition* Definition;
+	int32 Count;
+	int32 LoadedAmmo;
+};
+
+inline std::vector<FLategameLoadout> ARLoadouts;
+inline std::vector<FLategameLoadout> ShotgunLoadouts;
+inline std::vector<FLategameLoadout> SMGLoadouts;
+inline std::vector<FLategameLoadout> FirstConsumableSlotLoadouts;
+inline std::vector<FLategameLoadout> SecondConsumableSlotLoadouts;
+
 namespace Misc
 {
 	template <typename T>
@@ -303,13 +316,18 @@ namespace Misc
 		for (AActor* Actor : Actors) {
 			UFortWeaponRangedItemDefinition* RangedItemDefinition = reinterpret_cast<UFortWeaponRangedItemDefinition*>(Actor);
 			if (RangedItemDefinition) {
-				FFortRangedWeaponStats WeaponStats;
-				UDataTableFunctionLibrary::GetDataTableRowFromName(DataTable, RangedItemDefinition->GetWeaponStatHandle().RowName, &WeaponStats);
+				for (auto& RowPair : RangedItemDefinition->WeaponStatHandle.DataTable->RowMap) {
+					if (RowPair.First == RangedItemDefinition->WeaponStatHandle.RowName) {
+						FFortRangedWeaponStats* WeaponStats = (FFortRangedWeaponStats*)RowPair.Second;
+						WeaponStats->KnockbackMagnitude = 0.0;
+						WeaponStats->MidRangeKnockbackMagnitude = 0.0;
+						WeaponStats->LongRangeKnockbackMagnitude = 0.0;
+						WeaponStats->KnockbackZAngle = 0.0;
+					}
 
-				WeaponStats.KnockbackMagnitude = 0.0;
-				WeaponStats.MidRangeKnockbackMagnitude = 0.0;
-				WeaponStats.LongRangeKnockbackMagnitude = 0.0;
-				WeaponStats.KnockbackZAngle = 0.0;
+				}
+
+
 			}
 		}
 

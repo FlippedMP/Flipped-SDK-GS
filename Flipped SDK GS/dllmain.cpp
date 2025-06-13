@@ -1,6 +1,7 @@
 #include "Other/Framework.h"
 #include "Core/Hooks.h"
 
+
 DWORD WINAPI Main(LPVOID)
 {
     AllocConsole();
@@ -56,6 +57,7 @@ DWORD WINAPI Main(LPVOID)
 
     if (bLategame) {
         Util::FHook("AFortGameModeAthena::OnAircraftEnteredDropZone", Addresses::OnAircraftEnteredDropZone, OnAircraftEnteredDropZone, DEFINE_OG(OnAircraftEnteredDropZoneOG));
+        Util::FHook("AFortGameModeAthena::OnAircraftExitedDropZone", Addresses::OnAircraftExitedDropZone, OnAircraftExitedDropZone, DEFINE_OG(OnAircraftExitedDropZoneOG));
     }
 #pragma endregion
 

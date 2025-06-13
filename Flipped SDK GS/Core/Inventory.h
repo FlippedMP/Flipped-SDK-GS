@@ -6,14 +6,16 @@ namespace Inventory
 {
 	void UpdateInventory(AFortPlayerControllerAthena* Controller, FFortItemEntry* ItemEntry = nullptr)
 	{
+
+
+		Controller->WorldInventory->bRequiresLocalUpdate = true;
+		Controller->WorldInventory->HandleInventoryLocalUpdate();
+		//Controller->HandleWorldInventoryLocalUpdate();
+
 		if (ItemEntry)
 			Controller->WorldInventory->Inventory.MarkItemDirty(*ItemEntry);
 		else
 			Controller->WorldInventory->Inventory.MarkArrayDirty();
-
-		Controller->WorldInventory->bRequiresLocalUpdate = true;
-		Controller->WorldInventory->HandleInventoryLocalUpdate();
-		Controller->HandleWorldInventoryLocalUpdate();
 	}
 
 	void UpdateEntry(AFortPlayerControllerAthena* Controller, UFortItemDefinition* Definition, int Count, int LoadedAmmo = -1) {
@@ -51,14 +53,22 @@ namespace Inventory
 				Item->SetOwningControllerForTemporaryItem(Controller);
 				Item->OwnerInventory = Controller->WorldInventory;
 
+				printf("Count: %d\n",Count);
+				printf("LoadedAmmo: %d\n",LoadedAmmo);
+
 				Item->ItemEntry.ItemDefinition = Definition;
-				Item->ItemEntry.PreviousCount = 0; // well, technically true??
 				Item->ItemEntry.Count = Count;
+				Item->ItemEntry.Level = 0;
 				Item->ItemEntry.LoadedAmmo = LoadedAmmo;
 
 				Controller->WorldInventory->Inventory.ItemInstances.Add(Item);
 				Controller->WorldInventory->Inventory.ReplicatedEntries.Add(Item->ItemEntry);
 				UpdateInventory(Controller, &Item->ItemEntry);
+
+				if (auto WorldDef = Util::Cast<UFortWorldItemDefinition>(Definition)) {
+					Controller->ServerExecuteInventoryItem(Item->ItemEntry.ItemGuid);
+					Controller->ClientEquipItem(Item->ItemEntry.ItemGuid, true);
+				}
 
 				return Item;
 			}
@@ -124,6 +134,35 @@ namespace Inventory
 				}
 			}
 		}
+	}
+
+	int GetClipSize(UFortItemDefinition* Definition)
+	{
+		if (auto WeaponDef = Util::Cast<UFortWeaponRangedItemDefinition>(Definition)) {
+			for (auto& RowPair : WeaponDef->WeaponStatHandle.DataTable->RowMap) {
+				if (RowPair.First == WeaponDef->WeaponStatHandle.RowName) {
+					return ((FFortRangedWeaponStats*)RowPair.Second)->ClipSize;
+				}
+			}
+		}
+
+		return 0;
+	}
+
+	int GetMaxStackSize(UFortItemDefinition* Definition)
+	{
+		if (!Definition)
+			return 0;
+
+		printf("Val: %f\n", Definition->MaxStackSize.Value);
+		float Val = Definition->MaxStackSize.Value;
+		
+		if (Val <= 0) {
+			UDataTableFunctionLibrary::EvaluateCurveTableRow(Definition->MaxStackSize.Curve.CurveTable, Definition->MaxStackSize.Curve.RowName, 0, nullptr, &Val, {});
+		}
+		printf("NewVal: %f\n", Val);
+
+		return Val;
 	}
 
 	void RemoveItem(AFortPlayerControllerAthena* Controller, FGuid ItemGUID, int Count = -1) {

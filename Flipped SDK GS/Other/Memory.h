@@ -19,6 +19,7 @@ namespace Addresses
 	const inline uint64_t SpawnLoot = 0x617CCBC;
 	const inline uint32_t ServerAttemptAircraftJumpVFT = 0x9E;
 	const inline uint64_t OnAircraftEnteredDropZone = 0x5F99274;
+	const inline uint64_t OnAircraftExitedDropZone = 0x5F992F8;
 
 	const inline uint32_t ServerCreateBuildingActorVFT = 0x24D;
 	const inline uint32_t ServerRepairBuildingActorVFT = 0x249;
