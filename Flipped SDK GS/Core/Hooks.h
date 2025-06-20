@@ -11,6 +11,10 @@ void (*TickFlushOG)(UNetDriver*); void TickFlush(UNetDriver* Driver) {
 	if (GetAsyncKeyState(VK_F5) & 1) {
 		UKismetSystemLibrary::ExecuteConsoleCommand(UWorld::GetWorld(), L"startaircraft", nullptr);
 	}
+
+	if (GetAsyncKeyState(VK_F6) & 1) {
+		UKismetSystemLibrary::ExecuteConsoleCommand(UWorld::GetWorld(), L"demospeed 5", nullptr);
+	}
 	
 	TickFlushOG(Driver); 
 }
@@ -364,36 +368,45 @@ void StartNewSafeZonePhase(AFortGameModeAthena* GameMode, int32_t OverrideSafeZo
 
 	static int LategameSafeZonePhase = 2;
 
-	static UCurveTable* FortGameData = GameState->AthenaGameDataTable;
-	static FName ShrinkTimeFName = UKismetStringLibrary::Conv_StringToName(L"Default.SafeZone.ShrinkTime");
-	static FName HoldTimeFName = UKismetStringLibrary::Conv_StringToName(L"Default.SafeZone.WaitTime");
+	static bool bDih = false;
 
-	if (FortGameData) {
-		for (int i = 0; i < GameState->MapInfo->SafeZoneDefinition.ShrinkTimeCached.Num(); i++) {
-			UDataTableFunctionLibrary::EvaluateCurveTableRow(FortGameData, ShrinkTimeFName, i, nullptr,
-				&GameState->MapInfo->SafeZoneDefinition.ShrinkTimeCached[i], {});
+	if (!bDih)
+	{
+		static UCurveTable* FortGameData = GameState->AthenaGameDataTable;
+		static FName ShrinkTimeFName = UKismetStringLibrary::Conv_StringToName(L"Default.SafeZone.ShrinkTime");
+		static FName HoldTimeFName = UKismetStringLibrary::Conv_StringToName(L"Default.SafeZone.WaitTime");
+
+		if (FortGameData) {
+			for (int i = 0; i < GameState->MapInfo->SafeZoneDefinition.ShrinkTimeCached.Num(); i++) {
+				UDataTableFunctionLibrary::EvaluateCurveTableRow(FortGameData, ShrinkTimeFName, i, nullptr,
+					&GameState->MapInfo->SafeZoneDefinition.ShrinkTimeCached[i], {});
+			}
+			for (int i = 0; i < GameState->MapInfo->SafeZoneDefinition.WaitTimeCached.Num(); i++) {
+				UDataTableFunctionLibrary::EvaluateCurveTableRow(FortGameData, HoldTimeFName, i, nullptr,
+					&GameState->MapInfo->SafeZoneDefinition.WaitTimeCached[i], {});
+			}
+			for (int i = 0; i < GameState->MapInfo->SafeZoneDefinition.ForceDistanceMinCached.Num(); i++) {
+				UDataTableFunctionLibrary::EvaluateCurveTableRow(GameState->MapInfo->SafeZoneDefinition.ForceDistanceMin.Curve.CurveTable,
+					GameState->MapInfo->SafeZoneDefinition.ForceDistanceMin.Curve.RowName, i, nullptr, &GameState->MapInfo->SafeZoneDefinition.ForceDistanceMinCached[i], {});
+			}
+			for (int i = 0; i < GameState->MapInfo->SafeZoneDefinition.RadiusChunked.Num(); i++) {
+				UDataTableFunctionLibrary::EvaluateCurveTableRow(GameState->MapInfo->SafeZoneDefinition.Radius.Curve.CurveTable,
+					GameState->MapInfo->SafeZoneDefinition.Radius.Curve.RowName, i, nullptr, &GameState->MapInfo->SafeZoneDefinition.RadiusChunked[i], {});
+			}
+			for (int i = 0; i < GameState->MapInfo->SafeZoneDefinition.ForceDistanceMaxCached.Num(); i++) {
+				UDataTableFunctionLibrary::EvaluateCurveTableRow(GameState->MapInfo->SafeZoneDefinition.ForceDistanceMax.Curve.CurveTable,
+					GameState->MapInfo->SafeZoneDefinition.ForceDistanceMax.Curve.RowName, i, nullptr, &GameState->MapInfo->SafeZoneDefinition.ForceDistanceMaxCached[i], {});
+			}
+			for (int i = 0; i < GameState->MapInfo->SafeZoneDefinition.MegaStormGridCellThicknessCached.Num(); i++) {
+				UDataTableFunctionLibrary::EvaluateCurveTableRow(GameState->MapInfo->SafeZoneDefinition.MegaStormGridCellThickness.Curve.CurveTable,
+					GameState->MapInfo->SafeZoneDefinition.MegaStormGridCellThickness.Curve.RowName, i, nullptr, &GameState->MapInfo->SafeZoneDefinition.MegaStormGridCellThicknessCached[i], {});
+			}
 		}
-		for (int i = 0; i < GameState->MapInfo->SafeZoneDefinition.WaitTimeCached.Num(); i++) {
-			UDataTableFunctionLibrary::EvaluateCurveTableRow(FortGameData, HoldTimeFName, i, nullptr,
-				&GameState->MapInfo->SafeZoneDefinition.WaitTimeCached[i], {});
-		}
-		for (int i = 0; i < GameState->MapInfo->SafeZoneDefinition.ForceDistanceMinCached.Num(); i++) {
-			UDataTableFunctionLibrary::EvaluateCurveTableRow(GameState->MapInfo->SafeZoneDefinition.ForceDistanceMin.Curve.CurveTable,
-				GameState->MapInfo->SafeZoneDefinition.ForceDistanceMin.Curve.RowName, i, nullptr, &GameState->MapInfo->SafeZoneDefinition.ForceDistanceMinCached[i], {});
-		}
-		for (int i = 0; i < GameState->MapInfo->SafeZoneDefinition.RadiusChunked.Num(); i++) {
-			UDataTableFunctionLibrary::EvaluateCurveTableRow(GameState->MapInfo->SafeZoneDefinition.Radius.Curve.CurveTable,
-				GameState->MapInfo->SafeZoneDefinition.Radius.Curve.RowName, i, nullptr, &GameState->MapInfo->SafeZoneDefinition.RadiusChunked[i], {});
-		}
-		for (int i = 0; i < GameState->MapInfo->SafeZoneDefinition.ForceDistanceMaxCached.Num(); i++) {
-			UDataTableFunctionLibrary::EvaluateCurveTableRow(GameState->MapInfo->SafeZoneDefinition.ForceDistanceMax.Curve.CurveTable,
-				GameState->MapInfo->SafeZoneDefinition.ForceDistanceMax.Curve.RowName, i, nullptr, &GameState->MapInfo->SafeZoneDefinition.ForceDistanceMaxCached[i], {});
-		}
-		for (int i = 0; i < GameState->MapInfo->SafeZoneDefinition.MegaStormGridCellThicknessCached.Num(); i++) {
-			UDataTableFunctionLibrary::EvaluateCurveTableRow(GameState->MapInfo->SafeZoneDefinition.MegaStormGridCellThickness.Curve.CurveTable,
-				GameState->MapInfo->SafeZoneDefinition.MegaStormGridCellThickness.Curve.RowName, i, nullptr, &GameState->MapInfo->SafeZoneDefinition.MegaStormGridCellThicknessCached[i], {});
-		}
+
+		bDih = true;
 	}
+
+
 
 	if (bLategame) 
 	{
@@ -409,12 +422,14 @@ void StartNewSafeZonePhase(AFortGameModeAthena* GameMode, int32_t OverrideSafeZo
 
 	if (GameMode->SafeZonePhase >= 0 && GameMode->SafeZonePhase < GameState->MapInfo->SafeZoneDefinition.WaitTimeCached.Num())
 		ChosenWaitTime = GameState->MapInfo->SafeZoneDefinition.WaitTimeCached[GameMode->SafeZonePhase];
+
+	GameMode->SafeZoneIndicator->SafeZoneStartShrinkTime = GameState->GetServerWorldTimeSeconds() + ChosenWaitTime;
 	
 	if (GameMode->SafeZonePhase >= 0 && GameMode->SafeZonePhase < GameState->MapInfo->SafeZoneDefinition.ShrinkTimeCached.Num())
 		ShrinkingTime = GameState->MapInfo->SafeZoneDefinition.ShrinkTimeCached[GameMode->SafeZonePhase];
 
-	GameMode->SafeZoneIndicator->SafeZoneStartShrinkTime = GameState->GetServerWorldTimeSeconds() + ChosenWaitTime;
-	GameMode->SafeZoneIndicator->SafeZoneFinishShrinkTime = GameState->GetServerWorldTimeSeconds() + ShrinkingTime;
+
+	GameMode->SafeZoneIndicator->SafeZoneFinishShrinkTime = GameMode->SafeZoneIndicator->SafeZoneStartShrinkTime + ShrinkingTime;
 
 	if (bLategame && 
 		(GameMode->SafeZonePhase == 2 || GameMode->SafeZonePhase == 3))
@@ -705,7 +720,7 @@ bool SpawnLoot(ABuildingContainer* Container) {
 			LootTierGroupToUse = Redirect;
 	}
 
-	TArray<FFortItemEntry> Entries;
+	TArray<FFortItemEntry*> Entries;
 	Looting::PickLootDrops(UWorld::GetWorld(), &Entries, LootTierGroupToUse, GameState->WorldLevel);
 
 	if (Entries.Num() <= 0)
@@ -713,11 +728,11 @@ bool SpawnLoot(ABuildingContainer* Container) {
 
 	FVector Location = Container->K2_GetActorLocation();
 	Location.Z += 20;
-	for (const FFortItemEntry& Entry : Entries) {
+	for (const FFortItemEntry* Entry : Entries) {
 		FSpawnPickupData Data{};
-		printf("Entry: %s\n", Entry.ItemDefinition->GetFullName().c_str());
-		Data.ItemDefinition = Entry.ItemDefinition;
-		Data.Count = Entry.Count;
+		printf("Entry: %s\n", Entry->ItemDefinition->GetFullName().c_str());
+		Data.ItemDefinition = Entry->ItemDefinition;
+		Data.Count = Entry->Count;
 		Data.Location = Location;
 		Data.FortPickupSourceTypeFlag = EFortPickupSourceTypeFlag::Container;
 		Data.FortPickupSpawnSource = EFortPickupSpawnSource::Unset;
@@ -1000,105 +1015,105 @@ void ProcessEvent(UObject* Context, UFunction* Function, void* Params) {
 			!strstr(FunctionName.c_str(), ("CanJumpInternal")) &&
 			!strstr(FunctionName.c_str(), ("OnDayPhaseChanged")) &&
 			!strstr(FunctionName.c_str(), ("Chime")) &&
-			!strstr(FunctionName.c_str(), ("ServerMove")) &&
-			!strstr(FunctionName.c_str(), ("OnVisibilitySetEvent")) &&
-			!strstr(FunctionName.c_str(), "ReceiveHit") &&
-			!strstr(FunctionName.c_str(), "ReadyToStartMatch") &&
-			!strstr(FunctionName.c_str(), "K2_GetComponentToWorld") &&
-			!strstr(FunctionName.c_str(), "ClientAckGoodMove") &&
-			!strstr(FunctionName.c_str(), "Prop_WildWest_WoodenWindmill_01") &&
-			!strstr(FunctionName.c_str(), "ContrailCheck") &&
-			!strstr(FunctionName.c_str(), "B_StockBattleBus_C") &&
-			!strstr(FunctionName.c_str(), "Subtitles.Subtitles_C.") &&
-			!strstr(FunctionName.c_str(), "/PinkOatmeal/PinkOatmeal_") &&
-			!strstr(FunctionName.c_str(), "BP_SpectatorPawn_C") &&
-			!strstr(FunctionName.c_str(), "FastSharedReplication") &&
-			!strstr(FunctionName.c_str(), "OnCollisionHitEffects") &&
-			!strstr(FunctionName.c_str(), "BndEvt__SkeletalMesh") &&
-			!strstr(FunctionName.c_str(), ".FortAnimInstance.AnimNotify_") &&
-			!strstr(FunctionName.c_str(), "OnBounceAnimationUpdate") &&
-			!strstr(FunctionName.c_str(), "ShouldShowSoundIndicator") &&
-			!strstr(FunctionName.c_str(), "Primitive_Structure_AmbAudioComponent_C") &&
-			!strstr(FunctionName.c_str(), "PlayStoppedIdleRotationAudio") &&
-			!strstr(FunctionName.c_str(), "UpdateOverheatCosmetics") &&
-			!strstr(FunctionName.c_str(), "StormFadeTimeline__UpdateFunc") &&
-			!strstr(FunctionName.c_str(), "BindVolumeEvents") &&
-			!strstr(FunctionName.c_str(), "UpdateStateEvent") &&
-			!strstr(FunctionName.c_str(), "VISUALS__UpdateFunc") &&
-			!strstr(FunctionName.c_str(), "Flash__UpdateFunc") &&
-			!strstr(FunctionName.c_str(), "SetCollisionEnabled") &&
-			!strstr(FunctionName.c_str(), "SetIntensity") &&
-			!strstr(FunctionName.c_str(), "Storm__UpdateFunc") &&
-			!strstr(FunctionName.c_str(), "CloudsTimeline__UpdateFunc") &&
-			!strstr(FunctionName.c_str(), "SetRenderCustomDepth") &&
-			!strstr(FunctionName.c_str(), "K2_UpdateCustomMovement") &&
-			!strstr(FunctionName.c_str(), "AthenaHitPointBar_C.Update") &&
-			!strstr(FunctionName.c_str(), "ExecuteUbergraph_Farm_WeatherVane_01") &&
-			!strstr(FunctionName.c_str(), "HandleOnHUDElementVisibilityChanged") &&
-			!strstr(FunctionName.c_str(), "ExecuteUbergraph_Fog_Machine") &&
-			!strstr(FunctionName.c_str(), "ReceiveBeginPlay") &&
-			!strstr(FunctionName.c_str(), "OnMatchStarted") &&
-			!strstr(FunctionName.c_str(), "CustomStateChanged") &&
-			!strstr(FunctionName.c_str(), "OnBuildingActorInitialized") &&
-			!strstr(FunctionName.c_str(), "OnWorldReady") &&
-			!strstr(FunctionName.c_str(), "OnAttachToBuilding") &&
-			!strstr(FunctionName.c_str(), "Clown Spinner") &&
-			!strstr(FunctionName.c_str(), "K2_GetActorLocation") &&
-			!strstr(FunctionName.c_str(), "GetViewTarget") &&
-			!strstr(FunctionName.c_str(), "GetAllActorsOfClass") &&
-			!strstr(FunctionName.c_str(), "OnUpdateMusic") &&
-			!strstr(FunctionName.c_str(), "Check Closest Point") &&
-			!strstr(FunctionName.c_str(), "OnSubtitleChanged__DelegateSignature") &&
-			!strstr(FunctionName.c_str(), "OnServerBounceCallback") &&
-			!strstr(FunctionName.c_str(), "BlueprintGetInteractionTime") &&
-			!strstr(FunctionName.c_str(), "OnServerStopCallback") &&
-			!strstr(FunctionName.c_str(), "Light Flash Timeline__UpdateFunc") &&
-			!strstr(FunctionName.c_str(), "MainFlightPath__UpdateFunc") &&
-			!strstr(FunctionName.c_str(), "PlayStartedIdleRotationAudio") &&
-			!strstr(FunctionName.c_str(), "BGA_Athena_FlopperSpawn_") &&
-			!strstr(FunctionName.c_str(), "CheckShouldDisplayUI") &&
-			!strstr(FunctionName.c_str(), "Timeline_0__UpdateFunc") &&
-			!strstr(FunctionName.c_str(), "ClientMoveResponsePacked") &&
-			!strstr(FunctionName.c_str(), "ExecuteUbergraph_B_Athena_FlopperSpawnWorld_Placement") &&
-			!strstr(FunctionName.c_str(), "Countdown__UpdateFunc") &&
-			!strstr(FunctionName.c_str(), "OnParachuteTrailUpdated") &&
-			!strstr(FunctionName.c_str(), "Moto FadeOut__UpdateFunc") &&
-			!strstr(FunctionName.c_str(), "ExecuteUbergraph_Apollo_GasPump_Valet") &&
-			!strstr(FunctionName.c_str(), "GetOverrideMeshMaterial") &&
-			!strstr(FunctionName.c_str(), "VendWobble__UpdateFunc") &&
-			!strstr(FunctionName.c_str(), "WaitForPawn") &&
-			!strstr(FunctionName.c_str(), "FragmentMovement__UpdateFunc") &&
-			!strstr(FunctionName.c_str(), "TrySetup") &&
-			!strstr(FunctionName.c_str(), "Fade Doused Smoke__UpdateFunc") &&
-			!strstr(FunctionName.c_str(), "SetPlayerToSkydive") &&
-			!strstr(FunctionName.c_str(), "BounceCar__UpdateFunc") &&
-			!strstr(FunctionName.c_str(), "BP_CalendarDynamicPOISelect") &&
-			!strstr(FunctionName.c_str(), "OnComponentHit_Event_0") &&
-			!strstr(FunctionName.c_str(), "HandleSimulatingComponentHit") &&
-			!strstr(FunctionName.c_str(), "CBGA_GreenGlop_WithGrav_C") &&
-			!strstr(FunctionName.c_str(), "WarmupCountdownEndTimeUpdated") &&
-			!strstr(FunctionName.c_str(), "BP_CanInteract") &&
-			!strstr(FunctionName.c_str(), "AthenaHitPointBar_C") &&
-			!strstr(FunctionName.c_str(), "ServerFireAIDirectorEvent") &&
-			!strstr(FunctionName.c_str(), "BlueprintThreadSafeUpdateAnimation") &&
-			!strstr(FunctionName.c_str(), "On Amb Zap Spawn") &&
-			!strstr(FunctionName.c_str(), "ServerSetPlayerCanDBNORevive") &&
-			!strstr(FunctionName.c_str(), "BGA_Petrol_Pickup_C") &&
-			!strstr(FunctionName.c_str(), "GetMutatorsForContextActor") &&
-			!strstr(FunctionName.c_str(), "GetControlRotation") &&
-			!strstr(FunctionName.c_str(), "K2_GetComponentLocation") &&
-			!strstr(FunctionName.c_str(), "MoveFromOffset__UpdateFunc") &&
-			!strstr(FunctionFullName.c_str(), "PinkOatmeal_GreenGlop_C") &&
-			!strstr(ObjectName.c_str(), "CBGA_GreenGlop_WithGrav_C") &&
-			!strstr(ObjectName.c_str(), "FlopperSpawn") &&
-			!strstr(FunctionFullName.c_str(), "GCNL_EnvCampFire_Fire_C") &&
-			!strstr(FunctionName.c_str(), "BlueprintGetAllHighlightableComponents") &&
-			!strstr(FunctionFullName.c_str(), "Primitive_Structure_AmbAudioComponent") &&
-			!strstr(FunctionName.c_str(), "ServerTriggerCombatEvent") &&
-			!strstr(FunctionName.c_str(), "SpinCubeTimeline__UpdateFunc") &&
-			!strstr(ObjectName.c_str(), "FortPhysicsObjectComponent") &&
-			!strstr(FunctionName.c_str(), "GetTextValue") &&
-			!strstr(FunctionName.c_str(), "ExecuteUbergraph_BGA_Petrol_Pickup") &&
+				!strstr(FunctionName.c_str(), ("ServerMove")) &&
+				!strstr(FunctionName.c_str(), ("OnVisibilitySetEvent")) &&
+				!strstr(FunctionName.c_str(), "ReceiveHit") &&
+				!strstr(FunctionName.c_str(), "ReadyToStartMatch") &&
+				!strstr(FunctionName.c_str(), "K2_GetComponentToWorld") &&
+				!strstr(FunctionName.c_str(), "ClientAckGoodMove") &&
+				!strstr(FunctionName.c_str(), "Prop_WildWest_WoodenWindmill_01") &&
+				!strstr(FunctionName.c_str(), "ContrailCheck") &&
+				!strstr(FunctionName.c_str(), "B_StockBattleBus_C") &&
+				!strstr(FunctionName.c_str(), "Subtitles.Subtitles_C.") &&
+				!strstr(FunctionName.c_str(), "/PinkOatmeal/PinkOatmeal_") &&
+				!strstr(FunctionName.c_str(), "BP_SpectatorPawn_C") &&
+				!strstr(FunctionName.c_str(), "FastSharedReplication") &&
+				!strstr(FunctionName.c_str(), "OnCollisionHitEffects") &&
+				!strstr(FunctionName.c_str(), "BndEvt__SkeletalMesh") &&
+				!strstr(FunctionName.c_str(), ".FortAnimInstance.AnimNotify_") &&
+				!strstr(FunctionName.c_str(), "OnBounceAnimationUpdate") &&
+				!strstr(FunctionName.c_str(), "ShouldShowSoundIndicator") &&
+				!strstr(FunctionName.c_str(), "Primitive_Structure_AmbAudioComponent_C") &&
+				!strstr(FunctionName.c_str(), "PlayStoppedIdleRotationAudio") &&
+				!strstr(FunctionName.c_str(), "UpdateOverheatCosmetics") &&
+				!strstr(FunctionName.c_str(), "StormFadeTimeline__UpdateFunc") &&
+				!strstr(FunctionName.c_str(), "BindVolumeEvents") &&
+				!strstr(FunctionName.c_str(), "UpdateStateEvent") &&
+				!strstr(FunctionName.c_str(), "VISUALS__UpdateFunc") &&
+				!strstr(FunctionName.c_str(), "Flash__UpdateFunc") &&
+				!strstr(FunctionName.c_str(), "SetCollisionEnabled") &&
+				!strstr(FunctionName.c_str(), "SetIntensity") &&
+				!strstr(FunctionName.c_str(), "Storm__UpdateFunc") &&
+				!strstr(FunctionName.c_str(), "CloudsTimeline__UpdateFunc") &&
+				!strstr(FunctionName.c_str(), "SetRenderCustomDepth") &&
+				!strstr(FunctionName.c_str(), "K2_UpdateCustomMovement") &&
+				!strstr(FunctionName.c_str(), "AthenaHitPointBar_C.Update") &&
+				!strstr(FunctionName.c_str(), "ExecuteUbergraph_Farm_WeatherVane_01") &&
+				!strstr(FunctionName.c_str(), "HandleOnHUDElementVisibilityChanged") &&
+				!strstr(FunctionName.c_str(), "ExecuteUbergraph_Fog_Machine") &&
+				!strstr(FunctionName.c_str(), "ReceiveBeginPlay") &&
+				!strstr(FunctionName.c_str(), "OnMatchStarted") &&
+				!strstr(FunctionName.c_str(), "CustomStateChanged") &&
+				!strstr(FunctionName.c_str(), "OnBuildingActorInitialized") &&
+				!strstr(FunctionName.c_str(), "OnWorldReady") &&
+				!strstr(FunctionName.c_str(), "OnAttachToBuilding") &&
+				!strstr(FunctionName.c_str(), "Clown Spinner") &&
+				!strstr(FunctionName.c_str(), "K2_GetActorLocation") &&
+				!strstr(FunctionName.c_str(), "GetViewTarget") &&
+				!strstr(FunctionName.c_str(), "GetAllActorsOfClass") &&
+				!strstr(FunctionName.c_str(), "OnUpdateMusic") &&
+				!strstr(FunctionName.c_str(), "Check Closest Point") &&
+				!strstr(FunctionName.c_str(), "OnSubtitleChanged__DelegateSignature") &&
+				!strstr(FunctionName.c_str(), "OnServerBounceCallback") &&
+				!strstr(FunctionName.c_str(), "BlueprintGetInteractionTime") &&
+				!strstr(FunctionName.c_str(), "OnServerStopCallback") &&
+				!strstr(FunctionName.c_str(), "Light Flash Timeline__UpdateFunc") &&
+				!strstr(FunctionName.c_str(), "MainFlightPath__UpdateFunc") &&
+				!strstr(FunctionName.c_str(), "PlayStartedIdleRotationAudio") &&
+				!strstr(FunctionName.c_str(), "BGA_Athena_FlopperSpawn_") &&
+				!strstr(FunctionName.c_str(), "CheckShouldDisplayUI") &&
+				!strstr(FunctionName.c_str(), "Timeline_0__UpdateFunc") &&
+				!strstr(FunctionName.c_str(), "ClientMoveResponsePacked") &&
+				!strstr(FunctionName.c_str(), "ExecuteUbergraph_B_Athena_FlopperSpawnWorld_Placement") &&
+				!strstr(FunctionName.c_str(), "Countdown__UpdateFunc") &&
+				!strstr(FunctionName.c_str(), "OnParachuteTrailUpdated") &&
+				!strstr(FunctionName.c_str(), "Moto FadeOut__UpdateFunc") &&
+				!strstr(FunctionName.c_str(), "ExecuteUbergraph_Apollo_GasPump_Valet") &&
+				!strstr(FunctionName.c_str(), "GetOverrideMeshMaterial") &&
+				!strstr(FunctionName.c_str(), "VendWobble__UpdateFunc") &&
+				!strstr(FunctionName.c_str(), "WaitForPawn") &&
+				!strstr(FunctionName.c_str(), "FragmentMovement__UpdateFunc") &&
+				!strstr(FunctionName.c_str(), "TrySetup") &&
+				!strstr(FunctionName.c_str(), "Fade Doused Smoke__UpdateFunc") &&
+				!strstr(FunctionName.c_str(), "SetPlayerToSkydive") &&
+				!strstr(FunctionName.c_str(), "BounceCar__UpdateFunc") &&
+				!strstr(FunctionName.c_str(), "BP_CalendarDynamicPOISelect") &&
+				!strstr(FunctionName.c_str(), "OnComponentHit_Event_0") &&
+				!strstr(FunctionName.c_str(), "HandleSimulatingComponentHit") &&
+				!strstr(FunctionName.c_str(), "CBGA_GreenGlop_WithGrav_C") &&
+				!strstr(FunctionName.c_str(), "WarmupCountdownEndTimeUpdated") &&
+				!strstr(FunctionName.c_str(), "BP_CanInteract") &&
+				!strstr(FunctionName.c_str(), "AthenaHitPointBar_C") &&
+				!strstr(FunctionName.c_str(), "ServerFireAIDirectorEvent") &&
+				!strstr(FunctionName.c_str(), "BlueprintThreadSafeUpdateAnimation") &&
+				!strstr(FunctionName.c_str(), "On Amb Zap Spawn") &&
+				!strstr(FunctionName.c_str(), "ServerSetPlayerCanDBNORevive") &&
+				!strstr(FunctionName.c_str(), "BGA_Petrol_Pickup_C") &&
+				!strstr(FunctionName.c_str(), "GetMutatorsForContextActor") &&
+				!strstr(FunctionName.c_str(), "GetControlRotation") &&
+				!strstr(FunctionName.c_str(), "K2_GetComponentLocation") &&
+				!strstr(FunctionName.c_str(), "MoveFromOffset__UpdateFunc") &&
+				!strstr(FunctionFullName.c_str(), "PinkOatmeal_GreenGlop_C") &&
+				!strstr(ObjectName.c_str(), "CBGA_GreenGlop_WithGrav_C") &&
+				!strstr(ObjectName.c_str(), "FlopperSpawn") &&
+				!strstr(FunctionFullName.c_str(), "GCNL_EnvCampFire_Fire_C") &&
+				!strstr(FunctionName.c_str(), "BlueprintGetAllHighlightableComponents") &&
+				!strstr(FunctionFullName.c_str(), "Primitive_Structure_AmbAudioComponent") &&
+				!strstr(FunctionName.c_str(), "ServerTriggerCombatEvent") &&
+				!strstr(FunctionName.c_str(), "SpinCubeTimeline__UpdateFunc") &&
+				!strstr(ObjectName.c_str(), "FortPhysicsObjectComponent") &&
+				!strstr(FunctionName.c_str(), "GetTextValue") &&
+				!strstr(FunctionName.c_str(), "ExecuteUbergraph_BGA_Petrol_Pickup") &&
 				!strstr(FunctionName.c_str(), "Execute"))
 		{
 			printf(__FUNCTION__" Function called: %s with %s\n", FunctionFullName.c_str(), ObjectName.c_str());

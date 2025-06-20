@@ -1,6 +1,5 @@
 #pragma once
 #include "../Other/Framework.h"
-#include "./Looting.h"
 
 namespace Inventory
 {
@@ -32,6 +31,70 @@ namespace Inventory
 				return;
 			}
 		}
+	}
+
+
+
+	int GetLevel(const FDataTableCategoryHandle& CategoryHandle)
+	{
+		auto GameMode = (AFortGameModeAthena*)UWorld::GetWorld()->AuthorityGameMode;
+		auto GameState = (AFortGameStateAthena*)GameMode->GameState;
+
+		if (!CategoryHandle.DataTable)
+			return 0;
+
+		if (!CategoryHandle.RowContents.ComparisonIndex)
+			return 0;
+
+		TArray<FFortLootLevelData*> LootLevelData;
+
+		for (auto& LootLevelDataPair : CategoryHandle.DataTable->RowMap)
+		{
+			FFortLootLevelData* Value = reinterpret_cast<FFortLootLevelData*>(LootLevelDataPair.Value());
+			if (Value->Category != CategoryHandle.RowContents)
+				continue;
+
+			LootLevelData.Add(Value);
+		}
+
+		if (LootLevelData.Num() > 0)
+		{
+			int ind = -1;
+			int ll = 0;
+
+			for (int i = 0; i < LootLevelData.Num(); i++)
+			{
+				if (LootLevelData[i]->LootLevel <= GameState->WorldLevel && LootLevelData[i]->LootLevel > ll)
+				{
+					ll = LootLevelData[i]->LootLevel;
+					ind = i;
+				}
+			}
+
+			if (ind != -1)
+			{
+				auto subbed = LootLevelData[ind]->MaxItemLevel - LootLevelData[ind]->MinItemLevel;
+
+				if (subbed <= -1)
+					subbed = 0;
+				else
+				{
+					auto calc = (int)(((float)rand() / 32767) * (float)(subbed + 1));
+					if (calc <= subbed)
+						subbed = calc;
+				}
+
+				return subbed + LootLevelData[ind]->MinItemLevel;
+			}
+		}
+
+		return 0;
+	}
+
+	EFortQuickBars GetQuickbar(UFortItemDefinition* ItemDefinition)
+	{
+		if (!ItemDefinition) return EFortQuickBars::Max_None;
+		return ItemDefinition->IsA<UFortWeaponMeleeItemDefinition>() || ItemDefinition->IsA<UFortResourceItemDefinition>() || ItemDefinition->IsA<UFortAmmoItemDefinition>() || ItemDefinition->IsA<UFortTrapItemDefinition>() || ItemDefinition->IsA<UFortBuildingItemDefinition>() || ItemDefinition->IsA<UFortEditToolItemDefinition>() || ((UFortWorldItemDefinition*)ItemDefinition)->bForceIntoOverflow ? EFortQuickBars::Secondary : EFortQuickBars::Primary;
 	}
 
 	/* this needs WAY more checks but my brain power isnt enough anymore to do good inv funcs, maybe ill paste for an old gs */
@@ -66,8 +129,10 @@ namespace Inventory
 				UpdateInventory(Controller, &Item->ItemEntry);
 
 				if (auto WorldDef = Util::Cast<UFortWorldItemDefinition>(Definition)) {
-					Controller->ServerExecuteInventoryItem(Item->ItemEntry.ItemGuid);
-					Controller->ClientEquipItem(Item->ItemEntry.ItemGuid, true);
+					if (WorldDef->bForceFocusWhenAdded) {
+						Controller->ServerExecuteInventoryItem(Item->ItemEntry.ItemGuid);
+						Controller->ClientEquipItem(Item->ItemEntry.ItemGuid, true);
+					}
 				}
 
 				return Item;
@@ -138,6 +203,8 @@ namespace Inventory
 
 	int GetClipSize(UFortItemDefinition* Definition)
 	{
+		if (!Definition)
+			return 0;
 		if (auto WeaponDef = Util::Cast<UFortWeaponRangedItemDefinition>(Definition)) {
 			for (auto& RowPair : WeaponDef->WeaponStatHandle.DataTable->RowMap) {
 				if (RowPair.First == WeaponDef->WeaponStatHandle.RowName) {
@@ -229,6 +296,24 @@ namespace Inventory
 		}
 
 		UpdateInventory(Controller);
+	}
+
+	FFortItemEntry* MakeItemEntry(UFortItemDefinition* ItemDefinition, int32 Count, int32 Level) {
+		FFortItemEntry* IE = new FFortItemEntry();
+
+		IE->MostRecentArrayReplicationKey = -1;
+		IE->ReplicationID = -1;
+		IE->ReplicationKey = -1;
+
+		IE->ItemDefinition = ItemDefinition;
+		IE->Count = Count;
+		IE->LoadedAmmo = GetClipSize(ItemDefinition);
+		IE->Durability = 1.f;
+		IE->GameplayAbilitySpecHandle = FGameplayAbilitySpecHandle(-1);
+		IE->ParentInventory.ObjectIndex = -1;
+		IE->Level = Level;
+
+		return IE;
 	}
 
 	UFortWorldItem* GetItemFromGUID(AFortPlayerControllerAthena* Controller, FGuid GUID)

@@ -626,6 +626,18 @@ namespace UC
 			return end(*this);
 		}
 
+		template<typename NewValueType>
+		operator TMap<KeyElementType, NewValueType*>()
+		{
+			return *(TMap<KeyElementType, NewValueType*> *) this;
+		}
+
+		template<typename NewValueType>
+		operator TMap<KeyElementType, NewValueType*>() const
+		{
+			return *(TMap<KeyElementType, NewValueType*> *) this;
+		}
+
 	public:
 		inline       ElementType& operator[] (int32 Index)       { return Elements[Index]; }
 		inline const ElementType& operator[] (int32 Index) const { return Elements[Index]; }

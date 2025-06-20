@@ -38,7 +38,7 @@ DWORD WINAPI Main(LPVOID)
 
 	Util::FHook<UObject>("UObject::CanCreateInCurrentConext", uint32(0x100 / 8), ReturnTrue);
 
-    Util::FHook("UObject::ProcessEvent", uint64_t(Offsets::ProcessEvent), ProcessEvent, DEFINE_OG(ProcessEventOG));
+    //Util::FHook("UObject::ProcessEvent", uint64_t(Offsets::ProcessEvent), ProcessEvent, DEFINE_OG(ProcessEventOG));
 
     int NullCount = 0; // i refuse to use c style loops for this nigga
     for (uint64_t Address : Addresses::NullFunctions)
@@ -114,11 +114,13 @@ DWORD WINAPI Main(LPVOID)
 #pragma endregion
 
 #pragma region FortAthenaCreativePortal
-    UFunction* Func = UObject::FindObject<UFunction>("Function FortniteGame.FortAthenaCreativePortal.TeleportPlayerToLinkedVolume");
-    UFunction* Func2 = UObject::FindObject<UFunction>("Function Engine.PlayerController.OnServerStartedVisualLogger");
-    Func->ExecFunction = Func2->ExecFunction;
-    Util::FHook("AFortAthenaCreativePortal::TeleportPlayerToLinkedVolume", (uint64_t(Func2->ExecFunction) - Addresses::ImageBase), TeleportPlayerToLinkedVolume);
-
+    if (bCreative)
+    {
+        UFunction* Func = UObject::FindObject<UFunction>("Function FortniteGame.FortAthenaCreativePortal.TeleportPlayerToLinkedVolume");
+        UFunction* Func2 = UObject::FindObject<UFunction>("Function Engine.PlayerController.OnServerStartedVisualLogger");
+        Func->ExecFunction = Func2->ExecFunction;
+        Util::FHook("AFortAthenaCreativePortal::TeleportPlayerToLinkedVolume", (uint64_t(Func2->ExecFunction) - Addresses::ImageBase), TeleportPlayerToLinkedVolume);
+    }
 #pragma endregion
 
     FString MapName = bCreative ? L"open Creative_NoApollo_Terrain" : L"open Artemis_Terrain";

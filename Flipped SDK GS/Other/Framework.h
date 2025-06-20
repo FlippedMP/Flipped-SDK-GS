@@ -23,7 +23,7 @@ static FName NAME_GameNetDriver = UKismetStringLibrary::Conv_StringToName(L"Game
 
 static bool bUsesGameSessions = false;
 static constexpr bool bLategame = false;
-static constexpr bool bCreative = true;
+static constexpr bool bCreative = false;
 
 enum EHookType
 {

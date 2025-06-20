@@ -39,6 +39,12 @@ public:
 	bool IsA(class UClass* TypeClass) const;
 	bool IsDefaultObject() const;
 
+
+	template <typename _Ut>
+	__forceinline bool IsA() const
+	{
+		return IsA(_Ut::StaticClass());
+	}
 	void ExecuteUbergraph(int32 EntryPoint);
 
 public:
