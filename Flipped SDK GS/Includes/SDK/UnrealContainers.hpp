@@ -13,6 +13,12 @@
 #include <stdexcept>
 #include <iostream>
 #include "UtfN.hpp"
+#include <intrin.h>
+#include <future>
+#include <iomanip>
+#include <set>
+#include <stdint.h>
+#include <array>
 
 namespace UC
 {	
@@ -304,6 +310,22 @@ namespace UC
 			}
 
 			return true;
+		}
+
+		template <class PT>
+		ArrayElementType* Search(PT Predicate) {
+			for (auto& v : *this) {
+				if (Predicate(v)) return &v;
+			}
+			return nullptr;
+		}
+
+		template <class PT>
+		int32_t SearchIndex(PT Predicate) {
+			for (int32_t i = 0; i < Num(); i++) {
+				if (Predicate(Data[i])) return i;
+			}
+			return -1;
 		}
 
 		inline bool Contains(const ArrayElementType& Element)

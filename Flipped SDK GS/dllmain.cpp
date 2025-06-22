@@ -38,7 +38,11 @@ DWORD WINAPI Main(LPVOID)
 
 	Util::FHook<UObject>("UObject::CanCreateInCurrentConext", uint32(0x100 / 8), ReturnTrue);
 
-    //Util::FHook("UObject::ProcessEvent", uint64_t(Offsets::ProcessEvent), ProcessEvent, DEFINE_OG(ProcessEventOG));
+    Util::FHook("CanActivateAbility", uint64_t(0x4dd8528), ReturnTrue);
+
+    Util::FHook("UObject::ProcessEvent", uint64_t(Offsets::ProcessEvent), ProcessEvent, DEFINE_OG(ProcessEventOG));
+
+    Util::FHook("UFortKismetLibrary::GiveItemToInventoryOwner", uint64_t(0x6b6bb30), execGiveItemToInventoryOwner);
 
     int NullCount = 0; // i refuse to use c style loops for this nigga
     for (uint64_t Address : Addresses::NullFunctions)
@@ -74,6 +78,15 @@ DWORD WINAPI Main(LPVOID)
     Util::FHook<AFortPlayerControllerAthena>("AFortPlayerControllerAthena::ServerBeginEditingBuildingActor", Addresses::ServerBeginEditingBuildingActorVFT, ServerBeginEditingBuildingActor, DEFINE_OG(ServerBeginEditingBuildingActorOG));
     Util::FHook<AFortPlayerControllerAthena>("AFortPlayerControllerAthena::ServerEndEditingBuildingActor", Addresses::ServerEndEditingBuildingActorVFT, ServerEndEditingBuildingActor, DEFINE_OG(ServerEndEditingBuildingActorOG));
     Util::FHook<AFortPlayerControllerAthena>("AFortPlayerControllerAthena::ServerGiveCreativeItem", Addresses::ServerGiveCreativeItemVFT, ServerGiveCreativeItem);
+    Util::FHook("AFortPlayerControllerAthena::ClientOnPawnDied", uint64_t(0x6C26888), ClientOnPawnDiedHook, DEFINE_OG(ClientOnPawnDiedOG));
+    Util::FHook("AFortPlayerControllerAthena::GetPlayerViewpoint", uint64_t(0xEE8834), GetPlayerViewPointHook);
+    Util::FHook<AFortPlayerControllerAthena>("AFortPlayerControllerAthena::ServerPlayEmoteItem", uint32_t(0x1E8), ServerPlayEmoteItem, DEFINE_OG(ServerPlayEmoteItemOG));
+    Util::FHook<AFortPlayerControllerAthena>("AFortPlayerControllerAthena::ServerAttemptInventoryDrop", uint32_t(0x23A), ServerAttemptInventoryDrop);
+#pragma endregion
+
+#pragma region FortPawn
+    Util::FHook("AFortPawn::MovingEmoteStopped", uint64_t(0x1FF3A30), MovingEmoteStopped, DEFINE_OG(MovingEmoteStoppedOG));
+    Util::FHook("AFortPlayerPawnAthena::OnCapsuleBeginOverlap", uint64_t(0x115A604), OnCapsuleBeginOverlapHook);
 #pragma endregion
 
 #pragma region AbilitySystemComponent
@@ -142,6 +155,8 @@ DWORD WINAPI Main(LPVOID)
     UKismetSystemLibrary::ExecuteConsoleCommand(GetWorld(), L"log LogHotfixManager all");
     UKismetSystemLibrary::ExecuteConsoleCommand(GetWorld(), L"log LogOnlineSession all");
     UKismetSystemLibrary::ExecuteConsoleCommand(GetWorld(), L"log LogMatchmakingServiceDedicatedServer all");
+    UKismetSystemLibrary::ExecuteConsoleCommand(GetWorld(), L"log LogAbilitySystem all");
+    UKismetSystemLibrary::ExecuteConsoleCommand(GetWorld(), L"log LogGameplayTags all");
 
     GetWorld()->OwningGameInstance->LocalPlayers.Remove(0);
     return 0;

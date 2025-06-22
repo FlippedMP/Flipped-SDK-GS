@@ -582,6 +582,8 @@ public:
 	{
 		return static_cast<UEType*>(TPersistentObjectPtr::Get());
 	}
+
+	UEType* NewGet() const;
 };
 
 // Predefined struct FScriptInterface

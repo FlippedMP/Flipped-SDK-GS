@@ -132,6 +132,7 @@ static void SetPlaylist(AFortGameModeAthena* GameMode, UFortPlaylistAthena* Play
 	GameMode->CurrentPlaylistId = Playlist->PlaylistId;
 	GameMode->CurrentPlaylistName = Playlist->PlaylistName;
 	GameMode->WarmupRequiredPlayerCount = 1;
+	GameMode->GameSession->MaxPlayers = 50;
 
 	GameState->AirCraftBehavior = Playlist->AirCraftBehavior;
 	GameState->CachedSafeZoneStartUp = Playlist->SafeZoneStartUp;
@@ -149,7 +150,7 @@ bool ReadyToStartMatch(AFortGameModeAthena* thisPtr)
 	if (thisPtr->CurrentPlaylistId == -1)
 	{
 		if (UFortPlaylistAthena* Playlist =
-			UObject::FindObject<UFortPlaylistAthena>(bCreative ? "FortPlaylistAthena Playlist_PlaygroundV2.Playlist_PlaygroundV2" : "FortPlaylistAthena Playlist_DefaultSolo.Playlist_DefaultSolo"))
+			UObject::FindObject<UFortPlaylistAthena>(bCreative ? "FortPlaylistAthena Playlist_PlaygroundV2.Playlist_PlaygroundV2" : "FortPlaylistAthena Playlist_Vamp_Solo.Playlist_Vamp_Solo"))
 		{
 			SetPlaylist(thisPtr, Playlist);
 
@@ -166,7 +167,7 @@ bool ReadyToStartMatch(AFortGameModeAthena* thisPtr)
 				GameState->AdditionalPlaylistLevelsStreamed.Add(NewLevel);
 			}
 
-			for (const TSoftObjectPtr < UWorld> CurrentAdditionalLevelServerOnly : Playlist->AdditionalLevelsServerOnly)
+			for (const TSoftObjectPtr < UWorld>& CurrentAdditionalLevelServerOnly : Playlist->AdditionalLevelsServerOnly)
 			{
 				FString LevelName = UKismetStringLibrary::Conv_NameToString(CurrentAdditionalLevelServerOnly.ObjectID.AssetPathName);
 				ULevelStreamingDynamic::LoadLevelInstance(GetWorld(), LevelName, {}, {}, nullptr, FString(), {});
@@ -184,6 +185,10 @@ bool ReadyToStartMatch(AFortGameModeAthena* thisPtr)
 			thisPtr->HandleAllPlaylistLevelsVisible();
 			GameState->OnRep_CurrentPlaylistInfo();
 			GameState->OnRep_CurrentPlaylistId();
+			thisPtr->PlaylistHotfixOriginalGCFrequency = Playlist->GarbageCollectionFrequency;
+
+			thisPtr->bAllowSpectateAfterDeath = true;
+
 
 			thisPtr->AIDirector = Misc::SpawnActor<AAthenaAIDirector>();
 			thisPtr->AIDirector->Activate();
@@ -246,6 +251,9 @@ bool ReadyToStartMatch(AFortGameModeAthena* thisPtr)
 			if (bLategame) {
 				LoadLateGameLoadouts();
 			}
+
+			static UDataTable* AthenaRangedWeapons = Native::StaticLoadObject<UDataTable>("/Game/Athena/Items/Weapons/AthenaRangedWeapons.AthenaRangedWeapons");
+			Misc::ApplyDataTablePatch(AthenaRangedWeapons);
 
 			SET_TITLE("Flipped 19.10 - Listening!");
 		}
@@ -350,8 +358,7 @@ APawn* SpawnDefaultPawnFor(AFortGameModeAthena* thisPtr, AFortPlayerControllerAt
 		}
 		else FLIPPED_LOG("Invalid AthenaGameDataTable!");
 
-		static UDataTable* AthenaRangedWeapons = UObject::FindObject<UDataTable>("DataTable AthenaRangedWeapons.AthenaRangedWeapons");
-		Misc::ApplyDataTablePatch(AthenaRangedWeapons);
+
 
 		bFirst = true;
 	}
@@ -454,6 +461,12 @@ void ServerAcknowledgePossession(AFortPlayerControllerAthena* thisPtr, AFortPlay
 
 	PlayerState->HeroType = thisPtr->CosmeticLoadoutPC.Character->HeroDefinition;
 	UFortKismetLibrary::UpdatePlayerCustomCharacterPartsVisualization(PlayerState);
+
+	auto Func = UGA_Creative_OnKillSiphon_C::StaticClass()->GetFunction("GA_Creative_OnKillSiphon_C", "K2_ShouldAbilityRespondToEvent");
+
+	printf("Imagebase: %p", Addresses::ImageBase);
+
+	printf("Shit: %p", Func->ExecFunction);
 }
 
 void ServerLoadingScreenDropped(AFortPlayerControllerAthena* thisPtr) 
@@ -462,13 +475,13 @@ void ServerLoadingScreenDropped(AFortPlayerControllerAthena* thisPtr)
 	AFortPlayerStateAthena* PlayerState = Util::Cast<AFortPlayerStateAthena>(thisPtr->PlayerState);
 	AFortPlayerPawnAthena* Pawn = Util::Cast<AFortPlayerPawnAthena>(thisPtr->MyFortPawn);
 	if (!Pawn) return;
-	void* InterfaceAddress = Native::GetInterfaceAddress(Pawn, IAbilitySystemInterface::StaticClass());
+	void* InterfaceAddress = Native::GetInterfaceAddress(PlayerState, IAbilitySystemInterface::StaticClass());
 
 	if (!InterfaceAddress)
 		return;
 
 	TScriptInterface<IAbilitySystemInterface> Script;
-	Script.ObjectPointer = Pawn;
+	Script.ObjectPointer = PlayerState;
 	Script.InterfacePointer = InterfaceAddress;
 
 	UFortAbilitySet* DefaultAbilitySet = UObject::FindObject<UFortAbilitySet>("FortAbilitySet GAS_AthenaPlayer.GAS_AthenaPlayer");
@@ -542,23 +555,154 @@ void ServerExecuteInventoryItem(AFortPlayerControllerAthena* thisPtr, const FGui
 	if (!thisPtr || thisPtr->IsInAircraft())
 		return;
 
-	for (FFortItemEntry& ItemEntry : thisPtr->WorldInventory->Inventory.ReplicatedEntries)
-	{
-		if (ItemEntry.ItemDefinition->IsA(UFortTrapItemDefinition::StaticClass())) // just in case | idk if u know how to fix adam but i don't!
-			return;
+	UFortWorldItem* ItemInstance = nullptr;
 
-		if (ItemEntry.ItemGuid == ItemGUID)
-		{
-			if (!thisPtr->MyFortPawn) return;
-			thisPtr->MyFortPawn->EquipWeaponDefinition(
-				Util::Cast<UFortWeaponItemDefinition>(ItemEntry.ItemDefinition),
-				ItemGUID,
-				ItemEntry.TrackerGuid,
-				false
-			);
-
-			return;
+	for (auto& Instance : thisPtr->WorldInventory->Inventory.ItemInstances) {
+		if (Instance->ItemEntry.ItemGuid == ItemGUID) {
+			ItemInstance = Instance;
+			break;
 		}
+	}
+
+	if (!ItemInstance || !ItemInstance->ItemEntry.ItemDefinition)
+		return;
+
+	UFortWeaponItemDefinition* ItemDefinition = Util::Cast<UFortWeaponItemDefinition>(ItemInstance->ItemEntry.ItemDefinition);
+
+	if (!ItemDefinition)
+		return;
+
+	if (auto Dih = thisPtr->MyFortPawn->EquipWeaponDefinition(ItemDefinition, ItemInstance->ItemEntry.ItemGuid, FGuid(), false)) {
+
+	}
+}
+
+void GetPlayerViewPointHook(AFortPlayerControllerAthena* PC, FVector& Location, FRotator& Rotation) {
+	if (PC->StateName == UKismetStringLibrary::Conv_StringToName(L"Spectating"))
+	{
+		Location = PC->LastSpectatorSyncLocation;
+		Rotation = PC->LastSpectatorSyncRotation;
+	}
+	else if (PC->PlayerCameraManager && PC->PlayerCameraManager->CameraCache.Timestamp > 0.f) {
+		Location = PC->PlayerCameraManager->CameraCache.POV.Location;
+		Rotation = PC->PlayerCameraManager->CameraCache.POV.Rotation;
+	}
+	else {
+		AActor* TheViewTarget = PC->GetViewTarget();
+		if (TheViewTarget)
+		{
+			Location = TheViewTarget->K2_GetActorLocation();
+			Rotation = TheViewTarget->K2_GetActorRotation();
+		}
+		else {
+			if (PC->Pawn) {
+				PC->Pawn->GetActorEyesViewPoint(&Location, &Rotation);
+			}
+		}
+	}
+}
+
+void (*RemoveFromAlivePlayers)(AFortGameMode* GameMode, AFortPlayerController* DeadPC, AFortPlayerState* KillerState, AFortPawn* KillerPawn, UFortWeaponItemDefinition* KillerWeapon, EDeathCause, char) = decltype(RemoveFromAlivePlayers)(uint64_t(GetModuleHandle(0)) + 0x5F9D3A8);
+inline void (*ClientOnPawnDiedOG)(AFortPlayerControllerAthena* PC, FFortPlayerDeathReport& DeathReport);
+void ClientOnPawnDiedHook(AFortPlayerControllerAthena* PC, FFortPlayerDeathReport& DeathReport)
+{
+	auto GameState = Util::Cast<AFortGameStateAthena>(UWorld::GetWorld()->GameState);
+	auto DeadPawn = PC->MyFortPawn;
+	auto DeadPlayerState = Util::Cast<AFortPlayerStateAthena>(PC->PlayerState);
+	auto KillerPawn = DeathReport.KillerPawn;
+	auto KillerPlayerState = Util::Cast<AFortPlayerStateAthena>(DeathReport.KillerPlayerState);
+	auto GameMode = Util::Cast<AFortGameModeAthena>(UWorld::GetWorld()->AuthorityGameMode);
+	auto KillerController = KillerPlayerState ? Util::Cast<AFortPlayerControllerAthena>(DeathReport.KillerPlayerState->GetPlayerController()) : nullptr;
+	FVector DeathLocation = DeadPawn->K2_GetActorLocation();
+	float Distance = DeadPawn->GetDistanceTo(KillerPawn);
+	UFortWeaponItemDefinition* Item = DeathReport.KillerWeapon;
+
+	if (!DeadPlayerState)
+		return ClientOnPawnDiedOG(PC, DeathReport); 
+
+	DeadPlayerState->DeathInfo.bDBNO = DeadPawn->WasDBNOOnDeath();
+	DeadPlayerState->DeathInfo.bInitialized = true;
+	DeadPlayerState->DeathInfo.DeathTags = *reinterpret_cast<FGameplayTagContainer*>(__int64(DeadPawn) + 0x19e0);
+	DeadPlayerState->DeathInfo.DeathCause = KillerPlayerState->ToDeathCause(DeadPlayerState->DeathInfo.DeathTags, DeadPlayerState->DeathInfo.bDBNO);
+	DeadPlayerState->DeathInfo.DeathClassSlot = (uint8)DeadPlayerState->DeathInfo.DeathCause;
+	DeadPlayerState->DeathInfo.DeathLocation = DeathLocation;
+	DeadPlayerState->DeathInfo.Distance = Distance;
+	DeadPlayerState->DeathInfo.FinisherOrDowner = KillerPlayerState ? DeathReport.KillerPlayerState : PC->PlayerState;
+	DeadPlayerState->OnRep_DeathInfo();
+	//add mutator stuff
+
+	bool AllDied = true;
+	for (auto Member : DeadPlayerState->PlayerTeam->TeamMembers) {
+		if (Member != PC && ((AFortPlayerControllerAthena*)Member)->bMarkedAlive)
+		{
+			AllDied = false;
+			break;
+		}
+	}
+
+	if (AllDied) {
+		for (AController* CurrentMember : DeadPlayerState->PlayerTeam->TeamMembers) {
+			AFortPlayerControllerAthena* CurrentMemberPC = Util::Cast<AFortPlayerControllerAthena>(CurrentMember);
+			if (!CurrentMemberPC) continue;
+
+			AFortPlayerStateAthena* CurrentMemberPlayerState = Util::Cast<AFortPlayerStateAthena>(CurrentMemberPC->PlayerState);
+			if (!CurrentMemberPlayerState) continue;
+
+			CurrentMemberPlayerState->Place = GameState->PlayersLeft;
+			CurrentMemberPlayerState->OnRep_Place();
+			FAthenaRewardResult Result{};
+			Result.TotalSeasonXpGained = CurrentMemberPC->XPComponent->TotalXpEarned;
+			Result.TotalBookXpGained = CurrentMemberPC->XPComponent->TotalXpEarned;
+			FAthenaMatchStats Stats{};
+			FAthenaMatchTeamStats TeamStats{};
+			TeamStats.Place = DeadPlayerState->Place;
+			TeamStats.TotalPlayers = GameState->TotalPlayers;
+			Stats.bIsValid = true;
+			CurrentMemberPC->ClientSendEndBattleRoyaleMatchForPlayer(true, Result);
+			CurrentMemberPC->ClientSendMatchStatsForPlayer(Stats);
+			CurrentMemberPC->ClientSendTeamStatsForPlayer(TeamStats);
+		}
+	}
+
+	if (KillerPlayerState && DeadPlayerState) {
+		PC->ClientReceiveKillNotification(KillerPlayerState, DeadPlayerState);
+		KillerPlayerState->ClientReportKill(DeadPlayerState);
+		KillerPlayerState->KillScore++;
+		for (AController* CurrentMember : DeadPlayerState->PlayerTeam->TeamMembers) {
+			AFortPlayerControllerAthena* CurrentMemberPC = Util::Cast<AFortPlayerControllerAthena>(CurrentMember);
+			if (!CurrentMemberPC) continue;
+			AFortPlayerStateAthena* CurrentMemberPlayerState = Util::Cast<AFortPlayerStateAthena>(CurrentMemberPC->PlayerState);
+			if (!CurrentMemberPlayerState) continue;
+			CurrentMemberPlayerState->TeamKillScore++;
+			CurrentMemberPlayerState->OnRep_TeamKillScore();
+			CurrentMemberPlayerState->ClientReportTeamKill(CurrentMemberPlayerState->TeamKillScore);
+		}
+		KillerPlayerState->OnRep_Kills();
+		//KillerPlayerState->ClientReportTournamentStatUpdate
+	}
+	//DeadPlayerState->PawnDeathLocation = DeathLocation;
+	RemoveFromAlivePlayers(GameMode, PC, DeadPlayerState, KillerPawn, Item, DeadPlayerState->DeathInfo.DeathCause, 0);
+	PC->bMarkedAlive = false;
+	ClientOnPawnDiedOG(PC, DeathReport);
+	if (KillerPawn && KillerPlayerState && Item) {
+		
+		static auto Wood = Native::StaticLoadObject<UFortItemDefinition>("/Game/Items/ResourcePickups/WoodItemData.WoodItemData");
+		static auto Stone = Native::StaticLoadObject<UFortItemDefinition>("/Game/Items/ResourcePickups/StoneItemData.StoneItemData");
+		static auto Metal = Native::StaticLoadObject<UFortItemDefinition>("/Game/Items/ResourcePickups/MetalItemData.MetalItemData");
+
+		Inventory::AddItem(PC, Wood, 50);
+		Inventory::AddItem(PC, Stone, 50);
+		Inventory::AddItem(PC, Metal, 50);
+
+		static FGameplayTag EarnedElim = { UKismetStringLibrary::Conv_StringToName(TEXT("Event.EarnedElimination")) };
+		FGameplayEventData Data{};
+		Data.EventTag = EarnedElim;
+		Data.ContextHandle = KillerPlayerState->AbilitySystemComponent->MakeEffectContext(); //need to be using MakeFortEffectContext
+		Data.Instigator = KillerController;
+		Data.Target = DeadPlayerState;
+		Data.TargetData = UAbilitySystemBlueprintLibrary::AbilityTargetDataFromActor(DeadPlayerState);
+		UAbilitySystemBlueprintLibrary::SendGameplayEventToActor(KillerPawn, Data.EventTag, Data);
+		printf("Test\n");
 	}
 }
 
@@ -720,23 +864,23 @@ bool SpawnLoot(ABuildingContainer* Container) {
 			LootTierGroupToUse = Redirect;
 	}
 
-	TArray<FFortItemEntry*> Entries;
-	Looting::PickLootDrops(UWorld::GetWorld(), &Entries, LootTierGroupToUse, GameState->WorldLevel);
+	TArray<FFortItemEntry> Entries;
+	Looting::PickLootDrops(UWorld::GetWorld(), Entries, LootTierGroupToUse, GameState->WorldLevel);
 
 	if (Entries.Num() <= 0)
 		return false;
 
 	FVector Location = Container->K2_GetActorLocation();
 	Location.Z += 20;
-	for (const FFortItemEntry* Entry : Entries) {
+	for (const FFortItemEntry& Entry : Entries) {
 		FSpawnPickupData Data{};
-		printf("Entry: %s\n", Entry->ItemDefinition->GetFullName().c_str());
-		Data.ItemDefinition = Entry->ItemDefinition;
-		Data.Count = Entry->Count;
+		printf("Entry: %s\n", Entry.ItemDefinition->GetFullName().c_str());
+		Data.ItemDefinition = Entry.ItemDefinition;
+		Data.Count = Entry.Count;
 		Data.Location = Location;
 		Data.FortPickupSourceTypeFlag = EFortPickupSourceTypeFlag::Container;
 		Data.FortPickupSpawnSource = EFortPickupSpawnSource::Unset;
-		Looting::SpawnPickup(Data);
+		Inventory::SpawnPickup(Data);
 	}
 
 	Container->bAlreadySearched = true;
@@ -791,12 +935,16 @@ void ServerAttemptAircraftJump(UFortControllerComponent_Aircraft* thisPtr, const
 		Inventory::AddItem(Controller, Wood, 500);
 		Inventory::AddItem(Controller, Stone, 450);
 		Inventory::AddItem(Controller, Metal, 350);
+
+
 	}
-
-
 
 	GameMode->RestartPlayer(Controller);
 	Controller->ControlRotation = Rotation;
+
+	if (bLategame) {
+		Controller->MyFortPawn->SetShield(100);
+	}
 }
 
 
@@ -1114,7 +1262,8 @@ void ProcessEvent(UObject* Context, UFunction* Function, void* Params) {
 				!strstr(ObjectName.c_str(), "FortPhysicsObjectComponent") &&
 				!strstr(FunctionName.c_str(), "GetTextValue") &&
 				!strstr(FunctionName.c_str(), "ExecuteUbergraph_BGA_Petrol_Pickup") &&
-				!strstr(FunctionName.c_str(), "Execute"))
+				!strstr(FunctionName.c_str(), "Execute") && Context->IsA(ABGA_RiftPortal_Item_Athena_C::StaticClass()))
+
 		{
 			printf(__FUNCTION__" Function called: %s with %s\n", FunctionFullName.c_str(), ObjectName.c_str());
 		}
@@ -1171,4 +1320,140 @@ void TeleportPlayerToLinkedVolume(AFortAthenaCreativePortal* Context, FFrame* St
 
 void ServerGiveCreativeItem(AFortPlayerControllerAthena* Controller, FFortItemEntry& ItemEntry) {
 	Inventory::AddItem(Controller, ItemEntry.ItemDefinition, ItemEntry.Count, ItemEntry.LoadedAmmo);
+}
+
+void (*ServerPlayEmoteItemOG)(AFortPlayerControllerAthena* PC, UFortMontageItemDefinitionBase* EmoteAsset);
+void ServerPlayEmoteItem(AFortPlayerControllerAthena* PC, UFortMontageItemDefinitionBase* EmoteAsset) {
+	if (!PC || !EmoteAsset) return;
+
+	UAbilitySystemComponent* ASC = Util::Cast<AFortPlayerStateAthena>(PC->PlayerState)->AbilitySystemComponent;
+	FGameplayAbilitySpec* SpecPtr = nullptr;
+	if (auto DanceAsset = Util::Cast<UAthenaDanceItemDefinition>(EmoteAsset)) {
+		PC->MyFortPawn->bMovingEmote = DanceAsset->bMovingEmote;
+		PC->MyFortPawn->bMovingEmoteForwardOnly = DanceAsset->bMoveForwardOnly;
+		PC->MyFortPawn->EmoteWalkSpeed = DanceAsset->WalkForwardSpeed;
+		FGameplayAbilitySpec Spec{ -1,-1,-1 };
+		Spec.Ability = (UGameplayAbility*)UGAB_Emote_Generic_C::StaticClass()->DefaultObject;
+		Spec.Level = 1;
+		Spec.InputID = -1;
+		Spec.SourceObject = (UObject*)EmoteAsset;
+		Spec.Handle.Handle = rand();
+		SpecPtr = &Spec;
+
+	}
+	if (EmoteAsset->IsA(UAthenaSprayItemDefinition::StaticClass())) {
+		FGameplayAbilitySpec Spec{ -1,-1,-1 };
+		Spec.Ability = (UGameplayAbility*)UGAB_Spray_Generic_C::StaticClass()->DefaultObject;
+		Spec.Level = 1;
+		Spec.InputID = -1;
+		Spec.SourceObject = (UObject*)EmoteAsset;
+		Spec.Handle.Handle = rand();
+		SpecPtr = &Spec;
+	}
+	if (EmoteAsset->IsA(UAthenaToyItemDefinition::StaticClass())) {
+		FGameplayAbilitySpec Spec{ -1,-1,-1 };
+		UClass* ToyThingy = Util::Cast<UAthenaToyItemDefinition>(EmoteAsset)->ToySpawnAbility.NewGet();
+		Spec.Ability = (UGameplayAbility*)ToyThingy->DefaultObject;
+		Spec.Level = 1;
+		Spec.InputID = -1;
+		Spec.SourceObject = (UObject*)EmoteAsset;
+		Spec.Handle.Handle = rand();
+		SpecPtr = &Spec;
+	}
+
+	int OutHandle = 0;
+	Native::GiveAbilityAndActivateOnce(ASC, &OutHandle, SpecPtr, nullptr);
+
+	return ServerPlayEmoteItemOG(PC, EmoteAsset);
+}
+
+void (*MovingEmoteStoppedOG)(AFortPawn*, FFrame*, void*);
+void MovingEmoteStopped(AFortPawn* Pawn, FFrame* Stack, void* Ret) {
+	Pawn->bMovingEmote = false;
+	Pawn->bMovingEmoteForwardOnly = false;
+
+	return MovingEmoteStoppedOG(Pawn, Stack, Ret);
+}
+
+void OnCapsuleBeginOverlapHook(AFortPlayerPawnAthena* Context, FFrame* Stack, void* Ret)
+{
+	UPrimitiveComponent* OverlappedComp = nullptr;
+	AActor* OtherActor = nullptr;
+	UPrimitiveComponent* OtherComp = nullptr;
+	int OtherBodyIndex;
+	bool bFromSweep;
+	FHitResult SweepResult;
+
+	if (!Context)
+	{
+		printf("No Context??");
+		return;
+	}
+	Stack->StepCompiledIn(&OverlappedComp);
+	Stack->StepCompiledIn(&OtherActor);
+	Stack->StepCompiledIn(&OtherComp);
+	Stack->StepCompiledIn(&OtherBodyIndex);
+	Stack->StepCompiledIn(&bFromSweep);
+	Stack->StepCompiledIn(&SweepResult);
+
+
+	typedef ABGA_RiftPortal_Item_Athena_C Paster;
+
+	if (OtherActor && OtherActor->IsA(Paster::StaticClass())) {
+		auto RiftPortal = (Paster*)OtherActor;
+		FVector TeleportLoc = RiftPortal->TeleportLocation;
+		printf("TeleportLoc: X:%f, Y:%f, Z:%f\n", TeleportLoc.X, TeleportLoc.Y, TeleportLoc.Z);
+		Context->K2_TeleportTo(TeleportLoc, RiftPortal->ActorRotation);
+		Context->BeginSkydiving(true);
+		auto Func = RiftPortal->Class->GetFunction("BGA_RiftPortal_Item_Athena_C", "TeleportPlayerAndSendEvent");
+		printf("ExecPtr: %p\n", Func->ExecFunction);
+	}
+	else if (OtherActor) {
+		printf("OtherActor: %s\n", OtherActor->GetFullName().c_str());
+	}
+}
+
+void ServerAttemptInventoryDrop(AFortPlayerControllerAthena* PlayerController, FGuid ItemGuid, int32 Count)
+{
+	printf(__FUNCTION__"\n");
+	Inventory::RemoveItem(PlayerController, ItemGuid, Count);
+}
+
+// TScriptInterface<class IFortInventoryOwnerInterface>InventoryOwner                                         (Parm, ZeroConstructor, IsPlainOldData, NoDestructor, UObjectWrapper, HasGetValueTypeHash, NativeAccessSpecifierPublic)
+// const class UFortWorldItemDefinition*   ItemDefinition                                         (ConstParm, Parm, ZeroConstructor, IsPlainOldData, NoDestructor, HasGetValueTypeHash, NativeAccessSpecifierPublic)
+// const struct FGuid&                     ItemVariantGuid                                        (Parm, ZeroConstructor, IsPlainOldData, NoDestructor, HasGetValueTypeHash, NativeAccessSpecifierPublic)
+// int32                                   NumberToGive                                           (Parm, ZeroConstructor, IsPlainOldData, NoDestructor, HasGetValueTypeHash, NativeAccessSpecifierPublic)
+// bool                                    bNotifyPlayer                                          (Parm, ZeroConstructor, IsPlainOldData, NoDestructor, HasGetValueTypeHash, NativeAccessSpecifierPublic)
+// int32                                   ItemLevel                                              (Parm, ZeroConstructor, IsPlainOldData, NoDestructor, HasGetValueTypeHash, NativeAccessSpecifierPublic)
+// int32                                   PickupInstigatorHandle                                 (Parm, ZeroConstructor, IsPlainOldData, NoDestructor, HasGetValueTypeHash, NativeAccessSpecifierPublic)
+// bool                                    bUseItemPickupAnalyticEvent                            (Parm, ZeroConstructor, IsPlainOldData, NoDestructor, HasGetValueTypeHash, NativeAccessSpecifierPublic)
+// const class UFortWorldItem*             ReturnValue                                            (ConstParm, Parm, OutParm, ZeroConstructor, ReturnParm, IsPlainOldData, NoDestructor, HasGetValueTypeHash, NativeAccessSpecifierPublic)
+UFortWorldItem* execGiveItemToInventoryOwner(UFortKismetLibrary* Context, FFrame* Stack, UFortWorldItem** Ret) {
+	printf(__FUNCTION__"\n");
+	TScriptInterface<IFortInventoryOwnerInterface> InventoryOwner;
+	UFortWorldItemDefinition* ItemDefinition = nullptr;
+	FGuid ItemVariantGuid;
+	int32 NumberToGive;
+	bool bNotifyPlayer;
+	int32 ItemLevel;
+	int32 PickupInstigatorhandle;
+	Stack->StepCompiledIn(&InventoryOwner);
+	Stack->StepCompiledIn(&ItemDefinition);
+	Stack->StepCompiledIn(&ItemVariantGuid);
+	Stack->StepCompiledIn(&NumberToGive);
+	Stack->StepCompiledIn(&bNotifyPlayer);
+	Stack->StepCompiledIn(&ItemLevel);
+	Stack->StepCompiledIn(&PickupInstigatorhandle);
+
+	if (ItemDefinition) {
+		if (ItemDefinition->GetName().contains("WID_Launcher_Petrol")) return *Ret;
+		printf("ItemDef: %s\n", ItemDefinition->GetFullName().c_str());
+		*Ret = Inventory::AddItem(Util::Cast<AFortPlayerControllerAthena>(InventoryOwner.GetObjectRef()), ItemDefinition, NumberToGive);
+	}
+	return *Ret;
+}
+
+char ShouldAbilityRespondToEvent(__int64 a1, FFrame* a2, char* a3) {
+	*a3 = true;
+	return *a3;
 }

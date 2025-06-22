@@ -1,6 +1,19 @@
 #pragma once
 #include "../Other/Framework.h"
 
+struct FSpawnPickupData
+{
+	UFortItemDefinition* ItemDefinition;
+	FVector Location;
+	FRotator Rotation = FRotator(0, 0, 0);
+	bool bRandomRotation = Rotation == FRotator(0, 0, 0);
+	int Count = 1;
+	int LoadedAmmo = -1;
+	AFortPawn* PickupOwner = nullptr;
+	EFortPickupSourceTypeFlag FortPickupSourceTypeFlag = EFortPickupSourceTypeFlag::Tossed;
+	EFortPickupSpawnSource FortPickupSpawnSource = EFortPickupSpawnSource::Unset;
+};
+
 namespace Inventory
 {
 	void UpdateInventory(AFortPlayerControllerAthena* Controller, FFortItemEntry* ItemEntry = nullptr)
@@ -9,7 +22,7 @@ namespace Inventory
 
 		Controller->WorldInventory->bRequiresLocalUpdate = true;
 		Controller->WorldInventory->HandleInventoryLocalUpdate();
-		//Controller->HandleWorldInventoryLocalUpdate();
+		Controller->HandleWorldInventoryLocalUpdate();
 
 		if (ItemEntry)
 			Controller->WorldInventory->Inventory.MarkItemDirty(*ItemEntry);
@@ -116,9 +129,6 @@ namespace Inventory
 				Item->SetOwningControllerForTemporaryItem(Controller);
 				Item->OwnerInventory = Controller->WorldInventory;
 
-				printf("Count: %d\n",Count);
-				printf("LoadedAmmo: %d\n",LoadedAmmo);
-
 				Item->ItemEntry.ItemDefinition = Definition;
 				Item->ItemEntry.Count = Count;
 				Item->ItemEntry.Level = 0;
@@ -128,11 +138,10 @@ namespace Inventory
 				Controller->WorldInventory->Inventory.ReplicatedEntries.Add(Item->ItemEntry);
 				UpdateInventory(Controller, &Item->ItemEntry);
 
-				if (auto WorldDef = Util::Cast<UFortWorldItemDefinition>(Definition)) {
-					if (WorldDef->bForceFocusWhenAdded) {
-						Controller->ServerExecuteInventoryItem(Item->ItemEntry.ItemGuid);
-						Controller->ClientEquipItem(Item->ItemEntry.ItemGuid, true);
-					}
+				auto WorldItemDef = Util::Cast<UFortWorldItemDefinition>(Definition);
+				if (WorldItemDef && WorldItemDef->bForceFocusWhenAdded) {
+					Controller->ServerExecuteInventoryItem(Item->ItemEntry.ItemGuid);
+					Controller->ClientEquipItem(Item->ItemEntry.ItemGuid, true);
 				}
 
 				return Item;
@@ -221,15 +230,53 @@ namespace Inventory
 		if (!Definition)
 			return 0;
 
-		printf("Val: %f\n", Definition->MaxStackSize.Value);
 		float Val = Definition->MaxStackSize.Value;
 		
 		if (Val <= 0) {
 			UDataTableFunctionLibrary::EvaluateCurveTableRow(Definition->MaxStackSize.Curve.CurveTable, Definition->MaxStackSize.Curve.RowName, 0, nullptr, &Val, {});
 		}
-		printf("NewVal: %f\n", Val);
 
 		return Val;
+	}
+
+	AFortPickupAthena* SpawnPickup(const FSpawnPickupData& SpawnPickupData)
+	{
+		UFortItemDefinition* ItemDefinition = SpawnPickupData.ItemDefinition;
+		FVector Location = SpawnPickupData.Location;
+		FRotator Rotation = SpawnPickupData.Rotation;
+		bool bRandomRotation = SpawnPickupData.bRandomRotation;
+		int Count = SpawnPickupData.Count;
+		int LoadedAmmo = SpawnPickupData.LoadedAmmo;
+		AFortPawn* PickupOwner = SpawnPickupData.PickupOwner;
+		EFortPickupSourceTypeFlag FortPickupSourceTypeFlag = SpawnPickupData.FortPickupSourceTypeFlag;
+		EFortPickupSpawnSource FortPickupSpawnSource = SpawnPickupData.FortPickupSpawnSource;
+
+		if (!ItemDefinition || Count == 0)
+			return nullptr;
+
+		if (AFortPickupAthena* NewPickup = Misc::SpawnActor<AFortPickupAthena>(Location, Rotation))
+		{
+			NewPickup->PawnWhoDroppedPickup = PickupOwner;
+			NewPickup->PrimaryPickupItemEntry.ItemDefinition = ItemDefinition;
+			NewPickup->PrimaryPickupItemEntry.Count = Count;
+
+			if (LoadedAmmo == -1)
+				LoadedAmmo = Inventory::GetClipSize(ItemDefinition);
+
+			NewPickup->PrimaryPickupItemEntry.LoadedAmmo = LoadedAmmo;
+			NewPickup->OnRep_PrimaryPickupItemEntry();
+
+			NewPickup->bRandomRotation = bRandomRotation;
+
+			if (!NewPickup->PickupLocationData.CombineTarget)
+			{
+				NewPickup->TossPickup(Location, PickupOwner, 0, true, false, FortPickupSourceTypeFlag, FortPickupSpawnSource);
+			}
+
+			return NewPickup;
+		}
+
+		return nullptr;
 	}
 
 	void RemoveItem(AFortPlayerControllerAthena* Controller, FGuid ItemGUID, int Count = -1) {
@@ -240,6 +287,18 @@ namespace Inventory
 			auto& Entry = Controller->WorldInventory->Inventory.ReplicatedEntries[i];
 			if (Entry.ItemGuid == ItemGUID) {
 				if (Count == -1) {
+
+
+					FSpawnPickupData Data{ };
+					Data.bRandomRotation = true;
+					Data.ItemDefinition = Entry.ItemDefinition;
+					Data.Count = Entry.Count;
+					Data.Location = Controller->MyFortPawn->K2_GetActorLocation();
+					Data.PickupOwner = Controller->MyFortPawn;
+					Data.FortPickupSpawnSource = EFortPickupSpawnSource::Unset;
+					Data.FortPickupSourceTypeFlag = EFortPickupSourceTypeFlag::Player;
+					Inventory::SpawnPickup(Data);
+
 					Controller->WorldInventory->Inventory.ReplicatedEntries.Remove(i);
 					Controller->WorldInventory->Inventory.MarkArrayDirty();
 					for (size_t j = 0; j < Controller->WorldInventory->Inventory.ItemInstances.Num(); j++) {
@@ -258,6 +317,17 @@ namespace Inventory
 				}
 				else {
 					if (Entry.Count - Count <= 0) {
+
+						FSpawnPickupData Data{ };
+						Data.bRandomRotation = true;
+						Data.ItemDefinition = Entry.ItemDefinition;
+						Data.Count = Entry.Count;
+						Data.Location = Controller->MyFortPawn->K2_GetActorLocation();
+						Data.PickupOwner = Controller->MyFortPawn;
+						Data.FortPickupSpawnSource = EFortPickupSpawnSource::Unset;
+						Data.FortPickupSourceTypeFlag = EFortPickupSourceTypeFlag::Player;
+						Inventory::SpawnPickup(Data);
+
 						Controller->WorldInventory->Inventory.ReplicatedEntries.Remove(i);
 						for (size_t j = 0; j < Controller->WorldInventory->Inventory.ItemInstances.Num(); j++) {
 							auto& Instance = Controller->WorldInventory->Inventory.ItemInstances[j];

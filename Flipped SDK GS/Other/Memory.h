@@ -140,4 +140,7 @@ namespace Native
 
 	inline void (*LoadPlayset)(UPlaysetLevelStreamComponent*)
 		= decltype(LoadPlayset)(Addresses::ImageBase + 0x67C1CAC);
+
+	FGameplayAbilitySpecHandle*(*GiveAbilityAndActivateOnce)(UAbilitySystemComponent*, int*, FGameplayAbilitySpec*, FGameplayEventData*)
+		= decltype(GiveAbilityAndActivateOnce)(Addresses::ImageBase + 0x4e01290);
 }

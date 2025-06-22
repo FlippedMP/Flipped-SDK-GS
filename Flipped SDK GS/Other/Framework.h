@@ -6,6 +6,8 @@
 #include <vector>
 #include <random>
 #include <thread>
+#include <map>
+#include <numeric>
 #include "../Includes/SDK/SDK.hpp"
 using namespace SDK;
 #include "../Includes/MinHook/MinHook.h"
@@ -308,16 +310,12 @@ namespace Misc
 
 	void ApplyDataTablePatch(UDataTable* DataTable)
 	{
-		if (!DataTable)
-			return;
+		std::vector<UFortWeaponRangedItemDefinition*> Items = GetObjectsOfClass<UFortWeaponRangedItemDefinition>();
 
-		TArray<AActor*> Actors;
-		UGameplayStatics::GetAllActorsOfClass(UWorld::GetWorld(), UFortWeaponRangedItemDefinition::StaticClass(), &Actors);
-
-		for (AActor* Actor : Actors) {
-			UFortWeaponRangedItemDefinition* RangedItemDefinition = reinterpret_cast<UFortWeaponRangedItemDefinition*>(Actor);
+		for (UFortWeaponRangedItemDefinition* RangedItemDefinition : Items) {
 			if (RangedItemDefinition) {
-				for (auto& RowPair : RangedItemDefinition->WeaponStatHandle.DataTable->RowMap) {
+				if (RangedItemDefinition->WeaponStatHandle.DataTable != DataTable) continue;
+				for (auto& RowPair : DataTable->RowMap) {
 					if (RowPair.First == RangedItemDefinition->WeaponStatHandle.RowName) {
 						FFortRangedWeaponStats* WeaponStats = (FFortRangedWeaponStats*)RowPair.Second;
 						WeaponStats->KnockbackMagnitude = 0.0;
@@ -327,12 +325,8 @@ namespace Misc
 					}
 
 				}
-
-
 			}
 		}
-
-		Actors.Free();
 	}
 
 	UFortPlaylistAthena* GetCurrentPlaylist()
@@ -366,9 +360,22 @@ public:
 		static void (*StepOriginal)(__int64, SDK::UObject*, void* const RESULT_PARAM) = decltype(StepOriginal)(InSDKUtils::GetImageBase() + 0xCCB6B8);
 		StepOriginal(__int64(this), Context, RESULT_PARAM);
 	}
-	void StepExplicitProperty(unsigned __int8* Result, SDK::FProperty* Property) {
-		static void (*StepExplicitPropertyOriginal)(__int64, unsigned __int8*, FProperty*) = decltype(StepExplicitPropertyOriginal)(InSDKUtils::GetImageBase() + 0xCC9C90);
+	void StepExplicitProperty(void* Result, SDK::FProperty* Property) {
+		static void (*StepExplicitPropertyOriginal)(__int64, void*, FProperty*) = decltype(StepExplicitPropertyOriginal)(InSDKUtils::GetImageBase() + 0xCC9C90);
 		StepExplicitPropertyOriginal(__int64(this), Result, Property);
+	}
+
+	void StepCompiledIn(void* const Result)
+	{
+		if (Code())
+		{
+			Step(Object(), Result);
+		}
+		else {
+			FProperty* Prop = PropertyChainForCompiledIn();
+			PropertyChainForCompiledIn() = (FProperty*)Prop->Next;
+			StepExplicitProperty(Result, Prop);
+		}
 	}
 };
 
@@ -382,6 +389,20 @@ public:
 
 template<typename UEType>
 UEType* SDK::TSoftObjectPtr<UEType>::NewGet() const
+{
+	std::string String = UKismetStringLibrary::Conv_NameToString(this->ObjectID.AssetPathName).ToString();
+	//printf("Getting %s\n", String.c_str());
+	if (this->WeakPtr.ObjectIndex != -1)
+		return Util::Cast<UEType>(UObject::GObjects->GetByIndex(this->WeakPtr.ObjectIndex));
+	else if (this->ObjectID.IsValid())
+		return Native::StaticLoadObject<UEType>(String);
+
+	return nullptr;
+}
+
+
+template<typename UEType>
+UEType* SDK::TSoftClassPtr<UEType>::NewGet() const
 {
 	std::string String = UKismetStringLibrary::Conv_NameToString(this->ObjectID.AssetPathName).ToString();
 	//printf("Getting %s\n", String.c_str());

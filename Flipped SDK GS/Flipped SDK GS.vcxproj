@@ -160,6 +160,7 @@
   <ItemGroup>
     <ClCompile Include="dllmain.cpp" />
     <ClCompile Include="Includes\SDK\SDK\Basic.cpp" />
+    <ClCompile Include="Includes\SDK\SDK\BGA_RiftPortal_Item_Athena_functions.cpp" />
     <ClCompile Include="Includes\SDK\SDK\CoreUObject_functions.cpp" />
     <ClCompile Include="Includes\SDK\SDK\Engine_functions.cpp" />
     <ClCompile Include="Includes\SDK\SDK\FortniteGame_functions.cpp" />
