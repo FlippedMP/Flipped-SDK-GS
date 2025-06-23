@@ -189,7 +189,6 @@ bool ReadyToStartMatch(AFortGameModeAthena* thisPtr)
 
 			thisPtr->bAllowSpectateAfterDeath = true;
 
-
 			thisPtr->AIDirector = Misc::SpawnActor<AAthenaAIDirector>();
 			thisPtr->AIDirector->Activate();
 
@@ -251,6 +250,36 @@ bool ReadyToStartMatch(AFortGameModeAthena* thisPtr)
 			if (bLategame) {
 				LoadLateGameLoadouts();
 			}
+			else {
+				TArray<AActor*> WarmupActors;
+				static UClass* WarmupClass = Native::StaticLoadObject<UClass>("/Game/Athena/Environments/Blueprints/Tiered_Athena_FloorLoot_Warmup.Tiered_Athena_FloorLoot_Warmup_C");
+				UGameplayStatics::GetAllActorsOfClass(GetWorld(), WarmupClass, &WarmupActors);
+
+				for (auto& WarmupActor : WarmupActors)
+				{
+					auto Container = (ABuildingContainer*)WarmupActor;
+
+					Container->BP_SpawnLoot(nullptr);
+
+					Container->K2_DestroyActor();
+				}
+				WarmupActors.Free();
+
+				WarmupClass = Native::StaticLoadObject<UClass>("/Game/Athena/Environments/Blueprints/Tiered_Athena_FloorLoot_01.Tiered_Athena_FloorLoot_01_C");
+				UGameplayStatics::GetAllActorsOfClass(UWorld::GetWorld(), WarmupClass, &WarmupActors);
+
+				for (auto& WarmupActor : WarmupActors)
+				{
+					auto Container = (ABuildingContainer*)WarmupActor;
+
+					Container->BP_SpawnLoot(nullptr);
+
+					Container->K2_DestroyActor();
+				}
+				WarmupActors.Free();
+			}
+
+
 
 			static UDataTable* AthenaRangedWeapons = Native::StaticLoadObject<UDataTable>("/Game/Athena/Items/Weapons/AthenaRangedWeapons.AthenaRangedWeapons");
 			Misc::ApplyDataTablePatch(AthenaRangedWeapons);
@@ -847,6 +876,22 @@ void WaitForMatchAssignmentReady(UAthenaAIServicePlayerBots* thisPtr, __int64 Fl
 	return WaitForMatchAssignmentReadyOG(thisPtr, FlowHandle);
 }
 
+struct FReservedRandomValues
+{
+	TArray<float> RandomValues;
+	int32 CurrentIndex;
+	int32 NumReservedRandomValues;
+};
+
+__int64 (*PostUpdateOG)(ABuildingContainer* Container, uint32_t a2, FReservedRandomValues* a3);
+__int64 PostUpdate(ABuildingContainer* Container, uint32_t a2, FReservedRandomValues* a3)
+{
+	Container->ReplicatedLootTier = 1;
+	Container->OnRep_LootTier();
+
+	return PostUpdateOG(Container, a2, a3);
+}
+
 bool SpawnLoot(ABuildingContainer* Container) {
 
 	if (bLategame)
@@ -860,21 +905,16 @@ bool SpawnLoot(ABuildingContainer* Container) {
 	FName LootTierGroupToUse = Container->SearchLootTierGroup;
 
 	for (auto& [SupportTierGroup, Redirect] : GameMode->RedirectAthenaLootTierGroups) {
-		if (Container->SearchLootTierGroup == SupportTierGroup)
+		if (LootTierGroupToUse == SupportTierGroup) {
 			LootTierGroupToUse = Redirect;
+			break;
+		}
 	}
-
-	TArray<FFortItemEntry> Entries;
-	Looting::PickLootDrops(UWorld::GetWorld(), Entries, LootTierGroupToUse, GameState->WorldLevel);
-
-	if (Entries.Num() <= 0)
-		return false;
 
 	FVector Location = Container->K2_GetActorLocation();
 	Location.Z += 20;
-	for (const FFortItemEntry& Entry : Entries) {
+	for (const FFortItemEntry& Entry : Looting::PickLootDrops(LootTierGroupToUse)) {
 		FSpawnPickupData Data{};
-		printf("Entry: %s\n", Entry.ItemDefinition->GetFullName().c_str());
 		Data.ItemDefinition = Entry.ItemDefinition;
 		Data.Count = Entry.Count;
 		Data.Location = Location;

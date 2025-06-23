@@ -382,8 +382,10 @@ namespace UC
 		inline explicit operator bool() const { return IsValid(); };
 
 	public:
-		template<typename T> friend Iterators::TArrayIterator<T> begin(const TArray& Array);
-		template<typename T> friend Iterators::TArrayIterator<T> end  (const TArray& Array);
+		inline Iterators::TArrayIterator<ArrayElementType> begin() { return Iterators::TArrayIterator<ArrayElementType>(*this, 0); }
+		inline Iterators::TArrayIterator<ArrayElementType> begin() const { return Iterators::TArrayIterator<ArrayElementType>(*this, 0); }
+		inline Iterators::TArrayIterator<ArrayElementType> end() { return Iterators::TArrayIterator<ArrayElementType>(*this, Num()); }
+		inline Iterators::TArrayIterator<ArrayElementType> end() const { return Iterators::TArrayIterator<ArrayElementType>(*this, Num()); }
 	};
 
 	class FString : public TArray<wchar_t>
@@ -561,7 +563,7 @@ namespace UC
 		static constexpr uint32 ElementAlign = alignof(SetElementType);
 		static constexpr uint32 ElementSize = sizeof(SetElementType);
 
-	private:
+	public:
 		using SetDataType = ContainerImpl::SetElement<SetElementType>;
 		using HashType = ContainerImpl::TInlineAllocator<1>::ForElementType<int32>;
 
@@ -571,6 +573,9 @@ namespace UC
 		int32 HashSize;
 
 	public:
+
+
+
 		TSet()
 			: HashSize(0)
 		{
@@ -595,6 +600,16 @@ namespace UC
 		inline bool IsValidIndex(int32 Index) const { return Elements.IsValidIndex(Index); }
 
 		inline bool IsValid() const { return Elements.IsValid(); }
+
+		inline TSparseArray<SetDataType> GetElements()
+		{
+			return Elements;
+		}
+
+		inline HashType GetHash()
+		{
+			
+		}
 
 	public:
 		const ContainerImpl::FBitArray& GetAllocationFlags() const { return Elements.GetAllocationFlags(); }
@@ -659,6 +674,8 @@ namespace UC
 		{
 			return *(TMap<KeyElementType, NewValueType*> *) this;
 		}
+
+		
 
 	public:
 		inline       ElementType& operator[] (int32 Index)       { return Elements[Index]; }
