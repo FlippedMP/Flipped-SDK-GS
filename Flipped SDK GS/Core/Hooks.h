@@ -2,6 +2,7 @@
 #include "../Other/Framework.h"
 #include "./Inventory.h"
 #include"./Looting.h"
+#include "./AI.h"
 
 void (*DispatchRequestOG)(__int64, __int64, int); void DispatchRequest(__int64 a1, __int64 a2, int a3) { return DispatchRequestOG(a1, a2, 3); }
 void (*TickFlushOG)(UNetDriver*); void TickFlush(UNetDriver* Driver) { 
@@ -14,6 +15,11 @@ void (*TickFlushOG)(UNetDriver*); void TickFlush(UNetDriver* Driver) {
 
 	if (GetAsyncKeyState(VK_F6) & 1) {
 		UKismetSystemLibrary::ExecuteConsoleCommand(UWorld::GetWorld(), L"demospeed 5", nullptr);
+	}
+
+	if (GetAsyncKeyState(VK_F7) & 1 && Driver) {
+		FTransform Transform = Driver->ClientConnections[0]->PlayerController->Pawn->GetTransform();
+		AI::SpawnKlombo(Transform, 1);
 	}
 	
 	TickFlushOG(Driver); 
@@ -150,7 +156,7 @@ bool ReadyToStartMatch(AFortGameModeAthena* thisPtr)
 	if (thisPtr->CurrentPlaylistId == -1)
 	{
 		if (UFortPlaylistAthena* Playlist =
-			UObject::FindObject<UFortPlaylistAthena>(bCreative ? "FortPlaylistAthena Playlist_PlaygroundV2.Playlist_PlaygroundV2" : "FortPlaylistAthena Playlist_Vamp_Solo.Playlist_Vamp_Solo"))
+			UObject::FindObject<UFortPlaylistAthena>(bCreative ? "FortPlaylistAthena Playlist_PlaygroundV2.Playlist_PlaygroundV2" : "FortPlaylistAthena Playlist_DefaultSolo.Playlist_DefaultSolo"))
 		{
 			SetPlaylist(thisPtr, Playlist);
 
@@ -194,6 +200,13 @@ bool ReadyToStartMatch(AFortGameModeAthena* thisPtr)
 
 			if (!thisPtr->AIGoalManager)
 				thisPtr->AIGoalManager = Misc::SpawnActor<AFortAIGoalManager>();
+
+			if (!thisPtr->SpawningPolicyManager)
+			{
+				thisPtr->SpawningPolicyManager = Misc::SpawnActor<AFortAthenaSpawningPolicyManager>();
+				thisPtr->SpawningPolicyManager->GameModeAthena = thisPtr;
+				thisPtr->SpawningPolicyManager->GameStateAthena = GameState;
+			}
 
 			GameState->DefaultParachuteDeployTraceForGroundDistance = 10000;
 		}
@@ -284,6 +297,9 @@ bool ReadyToStartMatch(AFortGameModeAthena* thisPtr)
 			static UDataTable* AthenaRangedWeapons = Native::StaticLoadObject<UDataTable>("/Game/Athena/Items/Weapons/AthenaRangedWeapons.AthenaRangedWeapons");
 			Misc::ApplyDataTablePatch(AthenaRangedWeapons);
 
+
+
+
 			SET_TITLE("Flipped 19.10 - Listening!");
 		}
 
@@ -296,7 +312,19 @@ bool ReadyToStartMatch(AFortGameModeAthena* thisPtr)
 				return false;
 
 			FLIPPED_LOG(thisPtr->CurrentBucketId.ToString());
+			FLIPPED_LOG(thisPtr->CurrentBucketId.Num());
 			FLIPPED_LOG("JOBS");
+			auto Dih = Misc::split(thisPtr->CurrentBucketId.ToString(), ":");
+			auto playlistName = Dih[5];
+			FLIPPED_LOG(playlistName);
+			auto PathPart = Misc::split(playlistName, "_")[1];
+			std::string Shit = "/Game/Athena/Playlists/" + (PathPart.starts_with("default") ? "" : (PathPart + "/")) + std::string(playlistName) + "." + std::string(playlistName);
+			UFortPlaylistAthena* Playlist = Native::StaticLoadObject<UFortPlaylistAthena>(Shit);
+			if (!Playlist)
+			{
+				FLIPPED_LOG("Playlist not found");
+			}
+			SetPlaylist(thisPtr, Playlist);
 			bWaitedForPlaylist = true;
 		}
 	}
@@ -324,6 +352,7 @@ bool ReadyToStartMatch(AFortGameModeAthena* thisPtr)
 
 		if (!bLoadedProperly)
 			return false;
+
 	}
 
 	
@@ -387,10 +416,31 @@ APawn* SpawnDefaultPawnFor(AFortGameModeAthena* thisPtr, AFortPlayerControllerAt
 		}
 		else FLIPPED_LOG("Invalid AthenaGameDataTable!");
 
-
+		UCurveTable* LagerGameData = Native::StaticLoadObject<UCurveTable>("/Lager/DataTables/LagerGameData.LagerGameData");
+		for (auto& [Key, Value] : LagerGameData->GetRowMap()) {
+			if (Key.ToString() == "Default.Lager.Event.Weather.Tornado.Enabled" || Key.ToString() == "Default.Lager.Category.Tandem.Enabled") {
+				printf("Perhaps");
+				auto Row = (FSimpleCurve*)Value;
+				for (auto& Key : Row->Keys) {
+					Key.Value = 1.0;
+				}
+			}
+		}
 
 		bFirst = true;
 	}
+
+	auto PlayerState = (AFortPlayerStateAthena*)NewPlayer->PlayerState;
+
+	FGameMemberInfo Info{};
+	Info.MemberUniqueId = PlayerState->UniqueId;
+	Info.SquadId = PlayerState->SquadId;
+	Info.TeamIndex = PlayerState->TeamIndex;
+	Info.ReplicationID = -1;
+	Info.MostRecentArrayReplicationKey = -1;
+	Info.ReplicationKey = -1;
+	GameState->GameMemberInfoArray.Members.Add(Info);
+	GameState->GameMemberInfoArray.MarkArrayDirty();
 
 	return NewPawn;
 }
@@ -490,12 +540,6 @@ void ServerAcknowledgePossession(AFortPlayerControllerAthena* thisPtr, AFortPlay
 
 	PlayerState->HeroType = thisPtr->CosmeticLoadoutPC.Character->HeroDefinition;
 	UFortKismetLibrary::UpdatePlayerCustomCharacterPartsVisualization(PlayerState);
-
-	auto Func = UGA_Creative_OnKillSiphon_C::StaticClass()->GetFunction("GA_Creative_OnKillSiphon_C", "K2_ShouldAbilityRespondToEvent");
-
-	printf("Imagebase: %p", Addresses::ImageBase);
-
-	printf("Shit: %p", Func->ExecFunction);
 }
 
 void ServerLoadingScreenDropped(AFortPlayerControllerAthena* thisPtr) 
@@ -577,6 +621,24 @@ void ServerLoadingScreenDropped(AFortPlayerControllerAthena* thisPtr)
 		printf("Item: %s\n", PhoneItemDef->GetFullName().c_str());
 		Inventory::AddItem(thisPtr, PhoneItemDef);
 	}
+
+
+	static bool bFirst = false;
+	if (!bFirst) {
+		AI::SpawnPhoebeAI(1);
+
+
+		UClass* Class = Native::StaticLoadObject<UClass>("/ButterCake/Pawns/NPC_Pawn_ButterCake_B.NPC_Pawn_ButterCake_B_C");
+		if (!Class) {
+			printf("No Class");
+		}
+		UBehaviorTree* Tree = Native::StaticLoadObject<UBehaviorTree>("/ButterCake/BehaviorTree/BT_ButterCake.BT_ButterCake");
+		if (!Tree) {
+			printf("No Tree");
+		}
+		ANPC_Pawn_Wildlife_Parent_C* Dih = (ANPC_Pawn_Wildlife_Parent_C*)UAIBlueprintHelperLibrary::SpawnAIFromClass(UWorld::GetWorld(), Class, Tree, FVector(1, 1, 10000), {}, false, nullptr);
+	}
+	
 }
 
 void ServerExecuteInventoryItem(AFortPlayerControllerAthena* thisPtr, const FGuid& ItemGUID)
@@ -765,6 +827,7 @@ void ServerTryActivateAbilityWithEventData(UAbilitySystemComponent* thisPtr, FGa
 		SelectedAbilitySpec->InputPressed = false;
 		thisPtr->ActivatableAbilities.MarkItemDirty(*SelectedAbilitySpec);
 	}
+
 }
 
 void execOnGamePhaseStepChanged(AFortAthenaMutator_GiveItemsAtGamePhaseStep* thisPtr, FFrame* Stack) 
@@ -844,9 +907,7 @@ FServicePermissionsMcp* GetServicePermissionsByName(void* a1, void* a2)
 void CreateAndConfigureNavSystem(UAthenaNavSystemConfig* Config, UWorld* World)
 {
 	FLIPPED_LOG("CreateAndConfigureNavSystem");
-	Config->bPrioritizeNavigationAroundSpawners = true;
 	Config->bAutoSpawnMissingNavData = true;
-	Config->bLazyOctree = true;
 	return CreateAndConfigureNavSystemOG(Config, World);
 }
 
@@ -1302,7 +1363,7 @@ void ProcessEvent(UObject* Context, UFunction* Function, void* Params) {
 				!strstr(ObjectName.c_str(), "FortPhysicsObjectComponent") &&
 				!strstr(FunctionName.c_str(), "GetTextValue") &&
 				!strstr(FunctionName.c_str(), "ExecuteUbergraph_BGA_Petrol_Pickup") &&
-				!strstr(FunctionName.c_str(), "Execute") && Context->IsA(ABGA_RiftPortal_Item_Athena_C::StaticClass()))
+				!strstr(FunctionName.c_str(), "Execute") && Context->IsA(ANPC_Pawn_Wildlife_Parent_C::StaticClass()))
 
 		{
 			printf(__FUNCTION__" Function called: %s with %s\n", FunctionFullName.c_str(), ObjectName.c_str());
@@ -1439,7 +1500,15 @@ void OnCapsuleBeginOverlapHook(AFortPlayerPawnAthena* Context, FFrame* Stack, vo
 
 	typedef ABGA_RiftPortal_Item_Athena_C Paster;
 
-	if (OtherActor && OtherActor->IsA(Paster::StaticClass())) {
+	if (OtherActor && OtherActor->IsA(AFortPickupAthena::StaticClass()) && Util::Cast<AFortPickupAthena>(OtherActor)->bWeaponsCanBeAutoPickups) {
+		FFortPickupRequestInfo Info{};
+		Info.bPlayPickupSound = false;
+		Info.bIsAutoPickup = true;
+		Info.bIsVisualOnlyPickup = false;
+		Info.FlyTime = 0.4;
+		Context->ServerHandlePickupInfo(Util::Cast<AFortPickupAthena>(OtherActor), Info);
+	}
+	else if (OtherActor && OtherActor->IsA(Paster::StaticClass())) {
 		auto RiftPortal = (Paster*)OtherActor;
 		FVector TeleportLoc = RiftPortal->TeleportLocation;
 		printf("TeleportLoc: X:%f, Y:%f, Z:%f\n", TeleportLoc.X, TeleportLoc.Y, TeleportLoc.Z);
@@ -1456,6 +1525,16 @@ void OnCapsuleBeginOverlapHook(AFortPlayerPawnAthena* Context, FFrame* Stack, vo
 void ServerAttemptInventoryDrop(AFortPlayerControllerAthena* PlayerController, FGuid ItemGuid, int32 Count)
 {
 	printf(__FUNCTION__"\n");
+	auto ItemInstance = Inventory::GetItemFromGUID(PlayerController, ItemGuid);
+	FSpawnPickupData Data{ };
+	Data.bRandomRotation = true;
+	Data.ItemDefinition = ItemInstance->ItemEntry.ItemDefinition;
+	Data.Count = Count;
+	Data.Location = PlayerController->MyFortPawn->K2_GetActorLocation();
+	Data.PickupOwner = PlayerController->MyFortPawn;
+	Data.FortPickupSpawnSource = EFortPickupSpawnSource::Unset;
+	Data.FortPickupSourceTypeFlag = EFortPickupSourceTypeFlag::Player;
+	Inventory::SpawnPickup(Data);
 	Inventory::RemoveItem(PlayerController, ItemGuid, Count);
 }
 
@@ -1496,4 +1575,54 @@ UFortWorldItem* execGiveItemToInventoryOwner(UFortKismetLibrary* Context, FFrame
 char ShouldAbilityRespondToEvent(__int64 a1, FFrame* a2, char* a3) {
 	*a3 = true;
 	return *a3;
+}
+
+void ServerHandlePickupInfo(AFortPlayerPawn* Pawn, AFortPickup* Pickup, FFortPickupRequestInfo& RequestInfo) {
+	auto Distance = Pickup->GetDistanceTo(Pawn);
+	if (Distance <= 50)
+		Util::Cast<AFortPlayerControllerAthena>(Pawn->GetController())->ClientReturnToMainMenu(L"Being a diddy blud hacker");
+	Pickup->PickupLocationData.bPlayPickupSound = RequestInfo.bPlayPickupSound;
+	Pickup->PickupLocationData.FlyTime = 0.4f;
+	Pickup->PickupLocationData.ItemOwner = Pawn;
+	Pickup->PickupLocationData.PickupTarget = Pawn;
+	Pickup->PickupLocationData.StartDirection = (FVector_NetQuantizeNormal)RequestInfo.Direction;
+	Pickup->OnRep_PickupLocationData();
+	Pickup->bPickedUp = true;
+	Pickup->OnRep_bPickedUp();
+}
+
+void (*GivePickupToOG)(AFortPickup* thisPtr, IFortInventoryOwnerInterface* Interface, bool);
+void GivePickupTo(AFortPickup* thisPtr, IFortInventoryOwnerInterface* Interface, bool DestroyAfterPickup) {
+	UObject* (*GetObjectByAddress)(void* Interface) = decltype(GetObjectByAddress)(Interface->VTable[0x1]);
+	AFortPlayerControllerAthena* Object = (AFortPlayerControllerAthena*)GetObjectByAddress(Interface);
+	printf("InterfaceObject: %s\n", Object->GetName().c_str());
+
+	if (!Object->MyFortPawn || Util::Cast<AFortPlayerPawnAthena>(Object->MyFortPawn)->IsBotControlled()) return;
+	if (Object->IsA(AFortAthenaAIBotController::StaticClass())) return;
+
+	UFortItemDefinition* NewItem = thisPtr->PrimaryPickupItemEntry.ItemDefinition;
+	UFortItemDefinition* WeaponData = Object->MyFortPawn->CurrentWeapon->WeaponData;
+
+	int NumQuickBarItems = Inventory::GetNumQuickBarItems(Object);
+
+	printf("NumQuickBarItems: %d\n", NumQuickBarItems);
+
+	if (WeaponData->IsA(UFortWeaponMeleeItemDefinition::StaticClass()) && NumQuickBarItems >= 5) {
+		return; //For Now, later we need to make it drop the pickup
+	}
+
+	UFortWorldItem* Found = Object->WorldInventory->Inventory.ItemInstances.FindByPredicate([&](UFortWorldItem* Item) {
+		return Item->ItemEntry.ItemDefinition == WeaponData;
+	});
+
+	if (!Found) {
+		printf("Failed to find CurrentWeapon item");
+		return;
+	}
+
+	if (NewItem->IsStackable() && Inventory::GetQuickbar(NewItem) != EFortQuickBars::Primary) {
+		Inventory::AddItem(Object, NewItem, thisPtr->PrimaryPickupItemEntry.Count);
+	}
+
+	GivePickupToOG(thisPtr, Interface, DestroyAfterPickup);
 }

@@ -116,6 +116,8 @@ namespace Util
 			VirtualProtect(LPVOID(_Address), sizeof(_Byte), oldProtect, &oldProtect);
 		}
 
+
+
 		void ModifyInstructionInternal(uintptr_t _Instruction, uintptr_t _NewAddress)
 		{
 			uint8_t* InstructionAddr = (uint8_t*)_Instruction;
@@ -188,6 +190,7 @@ namespace Util
 
 			PatchInternal(Address, Byte);
 		}
+
 
 		FHook(std::string _ModInstructionName, uintptr_t _Instruction, uintptr_t _NewAddress) {
 			HookName = _ModInstructionName;
@@ -283,6 +286,21 @@ namespace Misc
 		return Center + FVector(x, y, 0.0f);
 	}
 
+	inline std::vector<std::string> split(std::string s, std::string delimiter) {
+		size_t pos_start = 0, pos_end, delim_len = delimiter.length();
+		std::string token;
+		std::vector<std::string> res;
+
+		while ((pos_end = s.find(delimiter, pos_start)) != std::string::npos) {
+			token = s.substr(pos_start, pos_end - pos_start);
+			pos_start = pos_end + delim_len;
+			res.push_back(token);
+		}
+
+		res.push_back(s.substr(pos_start));
+		return res;
+	}
+
 	template<typename T>
 	std::vector<T*> GetObjectsOfClass(UClass* Class = T::StaticClass())
 	{
@@ -301,6 +319,19 @@ namespace Misc
 		}
 
 		return ArrayOfObjects;
+	}
+
+	UAthenaCharacterItemDefinition* GetRandomCharacter() {
+		UAthenaCharacterItemDefinition* Ret = nullptr;
+		
+		static std::vector<UAthenaCharacterItemDefinition*> Characters;
+		if (Characters.empty()) {
+			Characters = Misc::GetObjectsOfClass<UAthenaCharacterItemDefinition>();
+		}
+
+		int RandomIndex = UKismetMathLibrary::RandomIntegerInRange(0, Characters.size());
+		Ret = Characters[RandomIndex];
+		return Ret;
 	}
 
 	UCurveTable* GetGameData()
@@ -412,4 +443,13 @@ UEType* SDK::TSoftClassPtr<UEType>::NewGet() const
 		return Native::StaticLoadObject<UEType>(String);
 
 	return nullptr;
+}
+
+template <typename _Is>
+static __forceinline void PatchUse(uintptr_t ptr, _Is byte)
+{
+	DWORD og;
+	VirtualProtect(LPVOID(ptr), sizeof(_Is), PAGE_EXECUTE_READWRITE, &og);
+	*(_Is*)ptr = byte;
+	VirtualProtect(LPVOID(ptr), sizeof(_Is), og, &og);
 }

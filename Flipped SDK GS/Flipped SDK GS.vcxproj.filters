@@ -45,6 +45,9 @@
     <ClInclude Include="Core\Looting.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="Core\AI.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="dllmain.cpp">
@@ -66,6 +69,9 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="Includes\SDK\SDK\BGA_RiftPortal_Item_Athena_functions.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="Includes\SDK\SDK\AIModule_functions.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>

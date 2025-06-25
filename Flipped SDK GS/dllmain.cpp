@@ -10,6 +10,8 @@ DWORD WINAPI Main(LPVOID)
     SET_TITLE("Flipped 19.10 - Initializing...");
     Sleep(5000);
 
+    printf("MM: %p", Addresses::ImageBase);
+
     *(bool*)(Addresses::GIsClient) = false;
     *(bool*)(Addresses::GIsServer) = true;
 
@@ -18,6 +20,7 @@ DWORD WINAPI Main(LPVOID)
 #pragma region GameSessionPatches
     Util::FHook("UFortGameInstance::GetServerAnalyticsProvider-PatchFix", Addresses::GameSessionPatch, uint8_t(0x85));
     Util::FHook("UnknownPatch - 1", 0x10268A1, uint8_t(0x85)); // adam name this if u remember what it is!
+    Util::FHook("GameSessionPlayerEligibility", 0x64540A0, uint8_t(0xC3));
 #pragma endregion
 
 #pragma region CommandLine
@@ -40,7 +43,7 @@ DWORD WINAPI Main(LPVOID)
 
     Util::FHook("CanActivateAbility", uint64_t(0x4dd8528), ReturnTrue);
 
-    Util::FHook("UObject::ProcessEvent", uint64_t(Offsets::ProcessEvent), ProcessEvent, DEFINE_OG(ProcessEventOG));
+    //Util::FHook("UObject::ProcessEvent", uint64_t(Offsets::ProcessEvent), ProcessEvent, DEFINE_OG(ProcessEventOG));
 
     Util::FHook("UFortKismetLibrary::GiveItemToInventoryOwner", uint64_t(0x6b6bb30), execGiveItemToInventoryOwner);
 
@@ -87,6 +90,7 @@ DWORD WINAPI Main(LPVOID)
 #pragma region FortPawn
     Util::FHook("AFortPawn::MovingEmoteStopped", uint64_t(0x1FF3A30), MovingEmoteStopped, DEFINE_OG(MovingEmoteStoppedOG));
     Util::FHook("AFortPlayerPawnAthena::OnCapsuleBeginOverlap", uint64_t(0x115A604), OnCapsuleBeginOverlapHook);
+    Util::FHook<AFortPlayerPawnAthena>("AFortPlayerPawn::ServerHandlePickupInfo", uint32_t(0x220), ServerHandlePickupInfo);
 #pragma endregion
 
 #pragma region AbilitySystemComponent
@@ -100,10 +104,11 @@ DWORD WINAPI Main(LPVOID)
 #pragma endregion
 
 #pragma region AthenaAIServicePlayerBots
-    /*
-        MH_CreateHook(LPVOID(Addresses::ImageBase + Addresses::SpawnAI), execSpawnAI, nullptr);
-        MH_EnableHook(LPVOID(Addresses::ImageBase + Addresses::SpawnAI));
-    */
+    
+    //PatchUse<uint16>(Addresses::ImageBase + 0x5EE9590, uint16_t(0xe990));
+
+    MH_CreateHook(LPVOID(Addresses::ImageBase + Addresses::SpawnAI), execSpawnAI, nullptr);
+    MH_EnableHook(LPVOID(Addresses::ImageBase + Addresses::SpawnAI));
 
     Util::FHook("UnknownPatch - 2", 0x5EE0507, uint32_t(0x1C4C899)); // 0x7B2CDA4 - (0x5EE0504 + 7)
     MH_CreateHook(LPVOID(Addresses::ImageBase + 0x7B2CDA4), InitalizeMMRInfos, nullptr);
@@ -136,6 +141,16 @@ DWORD WINAPI Main(LPVOID)
     }
 #pragma endregion
 
+#pragma region FortAthenaAISpawnerDataComponent_AIBotCosmeticBase
+    Util::FHook("UFortAthenaAISpawnerDataComponent_AIBotCosmeticBase::GetDances", uint64_t(0x6A41D5C), AI::GetDances);
+    Util::FHook("UFortAthenaAISpawnerDataComponent_AIBotCosmeticBase::GetLoadout", uint64_t(0x6A41DE4), AI::GetLoadout);
+#pragma endregion
+
+#pragma region FortPickup
+    Util::FHook<AFortPickupAthena>("FortPickup::GivePickupTo", uint32_t(0xDA), GivePickupTo, DEFINE_OG(GivePickupToOG));
+#pragma endregion
+
+
     FString MapName = bCreative ? L"open Creative_NoApollo_Terrain" : L"open Artemis_Terrain";
 
     UKismetSystemLibrary::ExecuteConsoleCommand(GetWorld(), MapName, nullptr);
@@ -155,8 +170,13 @@ DWORD WINAPI Main(LPVOID)
     UKismetSystemLibrary::ExecuteConsoleCommand(GetWorld(), L"log LogHotfixManager all");
     UKismetSystemLibrary::ExecuteConsoleCommand(GetWorld(), L"log LogOnlineSession all");
     UKismetSystemLibrary::ExecuteConsoleCommand(GetWorld(), L"log LogMatchmakingServiceDedicatedServer all");
-    UKismetSystemLibrary::ExecuteConsoleCommand(GetWorld(), L"log LogAbilitySystem all");
+    //UKismetSystemLibrary::ExecuteConsoleCommand(GetWorld(), L"log LogAbilitySystem all");
     UKismetSystemLibrary::ExecuteConsoleCommand(GetWorld(), L"log LogGameplayTags all");
+    UKismetSystemLibrary::ExecuteConsoleCommand(GetWorld(), L"log LogJson all");
+    UKismetSystemLibrary::ExecuteConsoleCommand(GetWorld(), L"log LogOnlineSession all");
+    UKismetSystemLibrary::ExecuteConsoleCommand(GetWorld(), L"log LogFortAI all");
+    UKismetSystemLibrary::ExecuteConsoleCommand(GetWorld(), L"log LogAISpawnerData all");
+    UKismetSystemLibrary::ExecuteConsoleCommand(GetWorld(), L"log LogFortPickup Verbose");
 
     GetWorld()->OwningGameInstance->LocalPlayers.Remove(0);
     return 0;

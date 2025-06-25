@@ -328,6 +328,15 @@ namespace UC
 			return -1;
 		}
 
+		template<typename Predicate>
+		ArrayElementType FindByPredicate(Predicate Pred) {
+			for (int32_t i = 0; i < Num(); i++) {
+				if (Pred(GetData()[i])) {
+					return GetData()[i];
+				}
+			}
+		}
+
 		inline bool Contains(const ArrayElementType& Element)
 		{
 			for (int i = 0; i < NumElements; i++)

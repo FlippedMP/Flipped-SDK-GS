@@ -30,22 +30,6 @@ namespace Inventory
 			Controller->WorldInventory->Inventory.MarkArrayDirty();
 	}
 
-	void UpdateEntry(AFortPlayerControllerAthena* Controller, UFortItemDefinition* Definition, int Count, int LoadedAmmo = -1) {
-		for (size_t i = 0; i < Controller->WorldInventory->Inventory.ReplicatedEntries.Num(); i++) {
-			auto& Entry = Controller->WorldInventory->Inventory.ReplicatedEntries[i];
-			if (Entry.ItemDefinition == Definition) {
-				Entry.PreviousCount = Entry.Count;
-				Entry.Count += Count;
-
-				if (LoadedAmmo != -1)
-					Entry.LoadedAmmo = LoadedAmmo;
-
-				UpdateInventory(Controller, &Entry);
-				return;
-			}
-		}
-	}
-
 
 
 	int GetLevel(const FDataTableCategoryHandle& CategoryHandle)
@@ -104,6 +88,75 @@ namespace Inventory
 		return 0;
 	}
 
+	int GetClipSize(UFortItemDefinition* Definition)
+	{
+		if (!Definition)
+			return 0;
+		if (auto WeaponDef = Util::Cast<UFortWeaponRangedItemDefinition>(Definition)) {
+			for (auto& RowPair : WeaponDef->WeaponStatHandle.DataTable->RowMap) {
+				if (RowPair.First == WeaponDef->WeaponStatHandle.RowName) {
+					return ((FFortRangedWeaponStats*)RowPair.Second)->ClipSize;
+				}
+			}
+		}
+
+		return 0;
+	}
+
+	AFortPickupAthena* SpawnPickup(const FSpawnPickupData& SpawnPickupData)
+	{
+		UFortItemDefinition* ItemDefinition = SpawnPickupData.ItemDefinition;
+		FVector Location = SpawnPickupData.Location;
+		FRotator Rotation = SpawnPickupData.Rotation;
+		bool bRandomRotation = SpawnPickupData.bRandomRotation;
+		int Count = SpawnPickupData.Count;
+		int LoadedAmmo = SpawnPickupData.LoadedAmmo;
+		AFortPawn* PickupOwner = SpawnPickupData.PickupOwner;
+		EFortPickupSourceTypeFlag FortPickupSourceTypeFlag = SpawnPickupData.FortPickupSourceTypeFlag;
+		EFortPickupSpawnSource FortPickupSpawnSource = SpawnPickupData.FortPickupSpawnSource;
+
+		if (!ItemDefinition || Count == 0)
+			return nullptr;
+
+		if (AFortPickupAthena* NewPickup = Misc::SpawnActor<AFortPickupAthena>(Location, Rotation))
+		{
+			NewPickup->PawnWhoDroppedPickup = PickupOwner;
+			NewPickup->PrimaryPickupItemEntry.ItemDefinition = ItemDefinition;
+			NewPickup->PrimaryPickupItemEntry.Count = Count;
+
+			if (LoadedAmmo == -1)
+				LoadedAmmo = Inventory::GetClipSize(ItemDefinition);
+
+			NewPickup->PrimaryPickupItemEntry.LoadedAmmo = LoadedAmmo;
+			NewPickup->OnRep_PrimaryPickupItemEntry();
+
+			NewPickup->bRandomRotation = bRandomRotation;
+
+			if (!NewPickup->PickupLocationData.CombineTarget)
+			{
+				NewPickup->TossPickup(Location, PickupOwner, 0, true, false, FortPickupSourceTypeFlag, FortPickupSpawnSource);
+			}
+
+			return NewPickup;
+		}
+
+		return nullptr;
+	}
+
+	int GetMaxStackSize(UFortItemDefinition* Definition)
+	{
+		if (!Definition)
+			return 0;
+
+		float Val = Definition->MaxStackSize.Value;
+
+		if (Val <= 0) {
+			UDataTableFunctionLibrary::EvaluateCurveTableRow(Definition->MaxStackSize.Curve.CurveTable, Definition->MaxStackSize.Curve.RowName, 0, nullptr, &Val, {});
+		}
+
+		return Val;
+	}
+
 	EFortQuickBars GetQuickbar(UFortItemDefinition* ItemDefinition)
 	{
 		if (!ItemDefinition) return EFortQuickBars::Max_None;
@@ -115,47 +168,69 @@ namespace Inventory
 		if (!Controller || !Controller->WorldInventory || !Definition)
 			return nullptr;
 
-		bool bItemExists = false;
-		for (size_t i = 0; i < Controller->WorldInventory->Inventory.ReplicatedEntries.Num(); i++) {
-			FFortItemEntry& Entry = Controller->WorldInventory->Inventory.ReplicatedEntries[i];
-			if (Entry.ItemDefinition == Definition) {
-				bItemExists = true;
-				break;
-			}
-		}
+		if (UFortWorldItem* Item = Util::Cast<UFortWorldItem>(Definition->CreateTemporaryItemInstanceBP(Count, 0))) {
+			Item->SetOwningControllerForTemporaryItem(Controller);
+			Item->OwnerInventory = Controller->WorldInventory;
 
-		if (!bItemExists) {
-			if (UFortWorldItem* Item = Util::Cast<UFortWorldItem>(Definition->CreateTemporaryItemInstanceBP(Count, 0))) {
-				Item->SetOwningControllerForTemporaryItem(Controller);
-				Item->OwnerInventory = Controller->WorldInventory;
+			Item->ItemEntry.ItemDefinition = Definition;
+			Item->ItemEntry.Count = Count;
+			Item->ItemEntry.Level = 0;
+			Item->ItemEntry.LoadedAmmo = GetClipSize(Definition);
 
-				Item->ItemEntry.ItemDefinition = Definition;
-				Item->ItemEntry.Count = Count;
-				Item->ItemEntry.Level = 0;
-				Item->ItemEntry.LoadedAmmo = LoadedAmmo;
+			if (Definition->IsStackable()) {
+				int MaxStackSize = GetMaxStackSize(Definition);
+				for (int i = 0; i < Controller->WorldInventory->Inventory.ItemInstances.Num(); i++) {
+					UFortWorldItem* IndexedItem = Controller->WorldInventory->Inventory.ItemInstances[i];
 
-				Controller->WorldInventory->Inventory.ItemInstances.Add(Item);
-				Controller->WorldInventory->Inventory.ReplicatedEntries.Add(Item->ItemEntry);
-				UpdateInventory(Controller, &Item->ItemEntry);
+					if (IndexedItem->ItemEntry.Count == MaxStackSize)
+						continue;
 
-				auto WorldItemDef = Util::Cast<UFortWorldItemDefinition>(Definition);
-				if (WorldItemDef && WorldItemDef->bForceFocusWhenAdded) {
-					Controller->ServerExecuteInventoryItem(Item->ItemEntry.ItemGuid);
-					Controller->ClientEquipItem(Item->ItemEntry.ItemGuid, true);
+					if (IndexedItem->ItemEntry.ItemDefinition == Definition) {
+						Item->ItemEntry.Count += IndexedItem->ItemEntry.Count;
+						if (Item->ItemEntry.Count > Definition->MaxStackSize.Value) {
+							int AmountToRemove = Item->ItemEntry.Count - round(MaxStackSize);
+							Item->ItemEntry.Count -= AmountToRemove;
+							if (Controller->MyFortPawn) {
+								FSpawnPickupData Data{};
+								Data.ItemDefinition = Definition;
+								Data.Location = Controller->MyFortPawn->K2_GetActorLocation();
+								Data.Count = AmountToRemove;
+								Data.FortPickupSourceTypeFlag = EFortPickupSourceTypeFlag::Player;
+								Data.FortPickupSpawnSource = EFortPickupSpawnSource::Unset;
+								Data.PickupOwner = Controller->MyFortPawn;
+								SpawnPickup(Data);
+							}
+						}
+
+						Controller->WorldInventory->Inventory.ItemInstances.Remove(i);
+						break;
+					}
 				}
+				for (int f = 0; f < Controller->WorldInventory->Inventory.ReplicatedEntries.Num(); f++) {
+					FFortItemEntry& Entry = Controller->WorldInventory->Inventory.ReplicatedEntries[f];
 
-				return Item;
+					if (Entry.ItemDefinition == Definition) {
+						Controller->WorldInventory->Inventory.ReplicatedEntries.Remove(f);
+					}
+				}
 			}
-			else 
-			{
-				FLIPPED_LOG("Failed to create item with definition: " + Definition->GetFullName());
-				return nullptr;
+
+			Controller->WorldInventory->Inventory.ItemInstances.Add(Item);
+			Controller->WorldInventory->Inventory.ReplicatedEntries.Add(Item->ItemEntry);
+			UpdateInventory(Controller, &Item->ItemEntry);
+
+			auto WorldItemDef = Util::Cast<UFortWorldItemDefinition>(Definition);
+			if (WorldItemDef && WorldItemDef->bForceFocusWhenAdded) {
+				Controller->ServerExecuteInventoryItem(Item->ItemEntry.ItemGuid);
+				Controller->ClientEquipItem(Item->ItemEntry.ItemGuid, true);
 			}
+
+			return Item;
 		}
-		else 
+		else
 		{
-			if (Definition->IsStackable())
-				UpdateEntry(Controller, Definition, Count, LoadedAmmo);
+			FLIPPED_LOG("Failed to create item with definition: " + Definition->GetFullName());
+			return nullptr;
 		}
 	}
 
@@ -210,75 +285,6 @@ namespace Inventory
 		}
 	}
 
-	int GetClipSize(UFortItemDefinition* Definition)
-	{
-		if (!Definition)
-			return 0;
-		if (auto WeaponDef = Util::Cast<UFortWeaponRangedItemDefinition>(Definition)) {
-			for (auto& RowPair : WeaponDef->WeaponStatHandle.DataTable->RowMap) {
-				if (RowPair.First == WeaponDef->WeaponStatHandle.RowName) {
-					return ((FFortRangedWeaponStats*)RowPair.Second)->ClipSize;
-				}
-			}
-		}
-
-		return 0;
-	}
-
-	int GetMaxStackSize(UFortItemDefinition* Definition)
-	{
-		if (!Definition)
-			return 0;
-
-		float Val = Definition->MaxStackSize.Value;
-		
-		if (Val <= 0) {
-			UDataTableFunctionLibrary::EvaluateCurveTableRow(Definition->MaxStackSize.Curve.CurveTable, Definition->MaxStackSize.Curve.RowName, 0, nullptr, &Val, {});
-		}
-
-		return Val;
-	}
-
-	AFortPickupAthena* SpawnPickup(const FSpawnPickupData& SpawnPickupData)
-	{
-		UFortItemDefinition* ItemDefinition = SpawnPickupData.ItemDefinition;
-		FVector Location = SpawnPickupData.Location;
-		FRotator Rotation = SpawnPickupData.Rotation;
-		bool bRandomRotation = SpawnPickupData.bRandomRotation;
-		int Count = SpawnPickupData.Count;
-		int LoadedAmmo = SpawnPickupData.LoadedAmmo;
-		AFortPawn* PickupOwner = SpawnPickupData.PickupOwner;
-		EFortPickupSourceTypeFlag FortPickupSourceTypeFlag = SpawnPickupData.FortPickupSourceTypeFlag;
-		EFortPickupSpawnSource FortPickupSpawnSource = SpawnPickupData.FortPickupSpawnSource;
-
-		if (!ItemDefinition || Count == 0)
-			return nullptr;
-
-		if (AFortPickupAthena* NewPickup = Misc::SpawnActor<AFortPickupAthena>(Location, Rotation))
-		{
-			NewPickup->PawnWhoDroppedPickup = PickupOwner;
-			NewPickup->PrimaryPickupItemEntry.ItemDefinition = ItemDefinition;
-			NewPickup->PrimaryPickupItemEntry.Count = Count;
-
-			if (LoadedAmmo == -1)
-				LoadedAmmo = Inventory::GetClipSize(ItemDefinition);
-
-			NewPickup->PrimaryPickupItemEntry.LoadedAmmo = LoadedAmmo;
-			NewPickup->OnRep_PrimaryPickupItemEntry();
-
-			NewPickup->bRandomRotation = bRandomRotation;
-
-			if (!NewPickup->PickupLocationData.CombineTarget)
-			{
-				NewPickup->TossPickup(Location, PickupOwner, 0, true, false, FortPickupSourceTypeFlag, FortPickupSpawnSource);
-			}
-
-			return NewPickup;
-		}
-
-		return nullptr;
-	}
-
 	void RemoveItem(AFortPlayerControllerAthena* Controller, FGuid ItemGUID, int Count = -1) {
 		if (!Controller)
 			return;
@@ -287,18 +293,6 @@ namespace Inventory
 			auto& Entry = Controller->WorldInventory->Inventory.ReplicatedEntries[i];
 			if (Entry.ItemGuid == ItemGUID) {
 				if (Count == -1) {
-
-
-					FSpawnPickupData Data{ };
-					Data.bRandomRotation = true;
-					Data.ItemDefinition = Entry.ItemDefinition;
-					Data.Count = Entry.Count;
-					Data.Location = Controller->MyFortPawn->K2_GetActorLocation();
-					Data.PickupOwner = Controller->MyFortPawn;
-					Data.FortPickupSpawnSource = EFortPickupSpawnSource::Unset;
-					Data.FortPickupSourceTypeFlag = EFortPickupSourceTypeFlag::Player;
-					Inventory::SpawnPickup(Data);
-
 					Controller->WorldInventory->Inventory.ReplicatedEntries.Remove(i);
 					Controller->WorldInventory->Inventory.MarkArrayDirty();
 					for (size_t j = 0; j < Controller->WorldInventory->Inventory.ItemInstances.Num(); j++) {
@@ -318,15 +312,7 @@ namespace Inventory
 				else {
 					if (Entry.Count - Count <= 0) {
 
-						FSpawnPickupData Data{ };
-						Data.bRandomRotation = true;
-						Data.ItemDefinition = Entry.ItemDefinition;
-						Data.Count = Entry.Count;
-						Data.Location = Controller->MyFortPawn->K2_GetActorLocation();
-						Data.PickupOwner = Controller->MyFortPawn;
-						Data.FortPickupSpawnSource = EFortPickupSpawnSource::Unset;
-						Data.FortPickupSourceTypeFlag = EFortPickupSourceTypeFlag::Player;
-						Inventory::SpawnPickup(Data);
+
 
 						Controller->WorldInventory->Inventory.ReplicatedEntries.Remove(i);
 						for (size_t j = 0; j < Controller->WorldInventory->Inventory.ItemInstances.Num(); j++) {
@@ -394,5 +380,15 @@ namespace Inventory
 				return Item;
 
 		return nullptr;
+	}
+
+	int32 GetNumQuickBarItems(AFortPlayerControllerAthena* Controller) {
+		int32 Num = 0;
+		for (UFortWorldItem* ItemInstance : Controller->WorldInventory->Inventory.ItemInstances) {
+			if (GetQuickbar(ItemInstance->ItemEntry.ItemDefinition) == EFortQuickBars::Primary)
+				Num++;
+		}
+
+		return Num;
 	}
 }
