@@ -146,7 +146,9 @@ DWORD WINAPI Main(LPVOID)
 #pragma endregion
 
 #pragma region FortPickup
-    Util::FHook<AFortPickupAthena>("FortPickup::GivePickupTo", uint32_t(0xDA), GivePickupTo, DEFINE_OG(GivePickupToOG));
+    Util::FHook<AFortPickupAthena>("AFortPickup::GivePickupTo", uint32_t(0xDA), GivePickupTo, DEFINE_OG(GivePickupToOG));
+    IFortInventoryOwnerInterface* InventoryOwner = (IFortInventoryOwnerInterface*)Native::GetInterfaceAddress(AFortWeapon::GetDefaultObj(), IFortInventoryOwnerInterface::StaticClass());
+    VirtualHookInternal(InventoryOwner->VTable, 0x2F, RemoveInventoryItem);
 #pragma endregion
 
 

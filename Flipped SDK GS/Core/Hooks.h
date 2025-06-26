@@ -409,7 +409,7 @@ APawn* SpawnDefaultPawnFor(AFortGameModeAthena* thisPtr, AFortPlayerControllerAt
 
 				if (RowName.ToString() == "Default.SafeZone.Damage") 
 				{
-					FLIPPED_LOG("Apply SafeZoneDamage");
+					//FLIPPED_LOG("Apply SafeZoneDamage");
 					for (auto& Key : Curve->Keys)
 					{
 						FSimpleCurveKey* KeyPtr = &Key;
@@ -423,7 +423,7 @@ APawn* SpawnDefaultPawnFor(AFortGameModeAthena* thisPtr, AFortPlayerControllerAt
 		UCurveTable* LagerGameData = Native::StaticLoadObject<UCurveTable>("/Lager/DataTables/LagerGameData.LagerGameData");
 		for (auto& [Key, Value] : LagerGameData->GetRowMap()) {
 			if (Key.ToString() == "Default.Lager.Event.Weather.Tornado.Enabled" || Key.ToString() == "Default.Lager.Category.Tandem.Enabled") {
-				printf("Perhaps");
+				//printf("Perhaps");
 				auto Row = (FSimpleCurve*)Value;
 				for (auto& Key : Row->Keys) {
 					Key.Value = 1.0;
@@ -1421,11 +1421,11 @@ void ServerPlayEmoteItem(AFortPlayerControllerAthena* PC, UFortMontageItemDefini
 
 	UAbilitySystemComponent* ASC = Util::Cast<AFortPlayerStateAthena>(PC->PlayerState)->AbilitySystemComponent;
 	FGameplayAbilitySpec* SpecPtr = nullptr;
+	FGameplayAbilitySpec Spec{ -1,-1,-1 };
 	if (auto DanceAsset = Util::Cast<UAthenaDanceItemDefinition>(EmoteAsset)) {
 		PC->MyFortPawn->bMovingEmote = DanceAsset->bMovingEmote;
 		PC->MyFortPawn->bMovingEmoteForwardOnly = DanceAsset->bMoveForwardOnly;
 		PC->MyFortPawn->EmoteWalkSpeed = DanceAsset->WalkForwardSpeed;
-		FGameplayAbilitySpec Spec{ -1,-1,-1 };
 		Spec.Ability = (UGameplayAbility*)UGAB_Emote_Generic_C::StaticClass()->DefaultObject;
 		Spec.Level = 1;
 		Spec.InputID = -1;
@@ -1435,7 +1435,6 @@ void ServerPlayEmoteItem(AFortPlayerControllerAthena* PC, UFortMontageItemDefini
 
 	}
 	if (EmoteAsset->IsA(UAthenaSprayItemDefinition::StaticClass())) {
-		FGameplayAbilitySpec Spec{ -1,-1,-1 };
 		Spec.Ability = (UGameplayAbility*)UGAB_Spray_Generic_C::StaticClass()->DefaultObject;
 		Spec.Level = 1;
 		Spec.InputID = -1;
@@ -1444,7 +1443,6 @@ void ServerPlayEmoteItem(AFortPlayerControllerAthena* PC, UFortMontageItemDefini
 		SpecPtr = &Spec;
 	}
 	if (EmoteAsset->IsA(UAthenaToyItemDefinition::StaticClass())) {
-		FGameplayAbilitySpec Spec{ -1,-1,-1 };
 		UClass* ToyThingy = Util::Cast<UAthenaToyItemDefinition>(EmoteAsset)->ToySpawnAbility.NewGet();
 		Spec.Ability = (UGameplayAbility*)ToyThingy->DefaultObject;
 		Spec.Level = 1;
@@ -1511,11 +1509,11 @@ void OnCapsuleBeginOverlapHook(AFortPlayerPawnAthena* Context, FFrame* Stack, vo
 	else if (OtherActor && OtherActor->IsA(Paster::StaticClass())) {
 		auto RiftPortal = (Paster*)OtherActor;
 		FVector TeleportLoc = RiftPortal->TeleportLocation;
-		printf("TeleportLoc: X:%f, Y:%f, Z:%f\n", TeleportLoc.X, TeleportLoc.Y, TeleportLoc.Z);
+		//printf("TeleportLoc: X:%f, Y:%f, Z:%f\n", TeleportLoc.X, TeleportLoc.Y, TeleportLoc.Z);
 		Context->K2_TeleportTo(TeleportLoc, RiftPortal->ActorRotation);
 		Context->BeginSkydiving(true);
 		auto Func = RiftPortal->Class->GetFunction("BGA_RiftPortal_Item_Athena_C", "TeleportPlayerAndSendEvent");
-		printf("ExecPtr: %p\n", Func->ExecFunction);
+		//printf("ExecPtr: %p\n", Func->ExecFunction);
 	}
 	else if (OtherActor) {
 		//printf("OtherActor: %s\n", OtherActor->GetFullName().c_str());
@@ -1524,7 +1522,7 @@ void OnCapsuleBeginOverlapHook(AFortPlayerPawnAthena* Context, FFrame* Stack, vo
 
 void ServerAttemptInventoryDrop(AFortPlayerControllerAthena* PlayerController, FGuid ItemGuid, int32 Count)
 {
-	printf(__FUNCTION__"\n");
+	//printf(__FUNCTION__"\n");
 	auto ItemInstance = Inventory::GetItemFromGUID(PlayerController, ItemGuid);
 	FSpawnPickupData Data{ };
 	Data.bRandomRotation = true;
@@ -1592,8 +1590,8 @@ void (*GivePickupToOG)(AFortPickup* thisPtr, IFortInventoryOwnerInterface* Inter
 void GivePickupTo(AFortPickup* thisPtr, IFortInventoryOwnerInterface* Interface, bool DestroyAfterPickup) {
 	UObject* (*GetObjectByAddress)(void* Interface) = decltype(GetObjectByAddress)(Interface->VTable[0x1]);
 	AFortPlayerControllerAthena* Object = (AFortPlayerControllerAthena*)GetObjectByAddress(Interface);
-	printf("InterfaceObject: %s\n", Object->GetName().c_str());
-	printf("Ptr: %p\n", Interface->VTable);
+	//printf("InterfaceObject: %s\n", Object->GetName().c_str());
+	//printf("Ptr: %p\n", Interface->VTable);
 	if (Object->IsA(AFortAthenaAIBotController::StaticClass())) return GivePickupToOG(thisPtr, Interface, DestroyAfterPickup);
 	if (!Object->MyFortPawn) return GivePickupToOG(thisPtr, Interface, DestroyAfterPickup);
 
@@ -1615,7 +1613,7 @@ void GivePickupTo(AFortPickup* thisPtr, IFortInventoryOwnerInterface* Interface,
 	else {
 		if (ItemToDrop && ItemToDrop->IsA(UFortWeaponMeleeItemDefinition::StaticClass())) {
 			//printf("Should Not happen\n");
-			printf("PrevItem: %s\n", PreviousItem->GetName().c_str());
+			//printf("PrevItem: %s\n", PreviousItem->GetName().c_str());
 			FSpawnPickupData Data{};
 			Data.ItemDefinition = PreviousItem;
 			Data.Count = PreviousInstance->ItemEntry.Count;
@@ -1701,4 +1699,9 @@ void SendCustomStatEventWithTags(UFortQuestManager* QuestManager, EFortQuestObje
 		Count);
 
 
+}
+
+void RemoveInventoryItem(IFortInventoryOwnerInterface* thisPtr, FGuid Guid, int a3, bool a4, bool a5) {
+	UE_LOG(LogFlipped, Log, "RemoveInventoryItem called with Count: %d, bNotifyPlayer: %d, bForceRemove: %d", 
+		a3, a4, a5);
 }

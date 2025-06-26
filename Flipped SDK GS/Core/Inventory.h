@@ -150,10 +150,6 @@ namespace Inventory
 
 		float Val = Definition->MaxStackSize.Value;
 
-		printf("PrevVal: %f\n", Val);
-
-		printf("RowName: %s\n", Definition->MaxStackSize.Curve.RowName.ToString().c_str());
-
 		if (Val <= 1) {
 			FSimpleCurve* Curve = nullptr;
 			static UCurveTable* AthenaGameData = Misc::GetGameData();
@@ -167,8 +163,6 @@ namespace Inventory
 			if (Curve)
 				Val = Curve->Keys[0].Value;
 		}
-
-		printf("ItemDef %s has %f StackSize\n", Definition->GetFullName().c_str(), Val);
 		return Val;
 	}
 
