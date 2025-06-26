@@ -446,6 +446,8 @@ APawn* SpawnDefaultPawnFor(AFortGameModeAthena* thisPtr, AFortPlayerControllerAt
 	GameState->GameMemberInfoArray.Members.Add(Info);
 	GameState->GameMemberInfoArray.MarkArrayDirty();
 
+	NewPlayer->GetQuestManager(ESubGame::Athena)->InitializeQuestAbilities(NewPawn);
+
 	return NewPawn;
 }
 
@@ -898,7 +900,7 @@ void InitalizeMMRInfos(UAthenaAIServicePlayerBots* thisPtr)
 	FMMRSpawningInfo NewSpawningInfo{};
 	NewSpawningInfo.BotSpawningDataInfoTargetELO = 1000.f;
 	NewSpawningInfo.BotSpawningDataInfoWeight = 100.f;
-	NewSpawningInfo.NumBotsToSpawn = 15;
+	NewSpawningInfo.NumBotsToSpawn = bDisableAI ? 0 : 15;
 	NewSpawningInfo.AISpawnerData = AIServicePlayerBots->DefaultBotAISpawnerData;
 
 	AIServicePlayerBots->DefaultAISpawnerDataComponentList = UFortAthenaAISpawnerData::CreateComponentListFromClass(AIServicePlayerBots->DefaultBotAISpawnerData, UWorld::GetWorld());
@@ -1670,14 +1672,23 @@ void SendCustomStatEventDirect(UFortQuestManager* QuestManager, FName ObjectiveB
 		ObjectiveBackendName.ToString().c_str(), QuestItem ? QuestItem->GetName().c_str() : "None", Count, bForceFlush);
 }
 
-void SendComplexCustomStatEvent(UFortQuestManager* QuestManger, UObject* TargetObject, const FGameplayTagContainer& AdditionalSourceTags, const FGameplayTagContainer& TargetTags, bool* QuestActive, bool* QuestCompleted, int32 Count) {
-	UE_LOG(LogFlipped, Log, "SendComplexCustomStatEvent called with TargetObject: %s, AdditionalSourceTags: %s, TargetTags: %s, QuestActive: %d, QuestCompleted: %d, Count: %d", 
+void SendComplexCustomStatEvent(UFortQuestManager* QuestManager, UObject* TargetObject, const FGameplayTagContainer& AdditionalSourceTags, const FGameplayTagContainer& TargetTags, bool* QuestActive, bool* QuestCompleted, int32 Count) {
+	UE_LOG(LogFlipped, Log, "SendComplexCustomStatEvent called with TargetObject: %s\n, AdditionalSourceTags: %s\n, TargetTags: %s\n, QuestActive: %d\n, QuestCompleted: %d\n, Count: %d\n", 
 		TargetObject ? TargetObject->GetName().c_str() : "None", 
 		AdditionalSourceTags.ToString().c_str(),
 		TargetTags.ToString().c_str(),
 		false, 
 		false, 
 		Count);
+
+	TArray<UFortQuestItem*> QuestItems;
+	QuestManager->GetCurrentQuests(&QuestItems);
+
+	if (QuestItems.Num() > 0) {
+		for (auto& QuestItem : QuestItems) {
+			UE_LOG(LogFlipped, Log, "QuestItem: %s\n, GameplayTags %s", QuestItem->GetName().c_str(), QuestItem->ItemDefinition->GameplayTags.ToString().c_str());
+		}
+	}
 }
 
 void SendCustomStatEventWithTags(UFortQuestManager* QuestManager, EFortQuestObjectiveStatEvent Type, const struct FGameplayTagContainer& AdditionalSourceTags, const struct FGameplayTagContainer& TargetTags, bool* QuestActive, bool* QuestCompleted, int32 Count) {
@@ -1688,4 +1699,6 @@ void SendCustomStatEventWithTags(UFortQuestManager* QuestManager, EFortQuestObje
 		false, 
 		false, 
 		Count);
+
+
 }
