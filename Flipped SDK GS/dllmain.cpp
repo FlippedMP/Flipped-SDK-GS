@@ -59,15 +59,13 @@ DWORD WINAPI Main(LPVOID)
     Util::FHook("AFortGameModeAthena::ReadyToStartMatch", Addresses::ReadyToStartMatch, ReadyToStartMatch);
     Util::FHook("AFortGameModeAthena::SpawnDefaultPawnFor", Addresses::SpawnDefaultPawnFor, SpawnDefaultPawnFor);
     Util::FHook("AFortGameModeAthena::StartNewSafeZonePhase", Addresses::StartNewSafeZonePhase, StartNewSafeZonePhase, DEFINE_OG(StartNewSafeZonePhaseOG));
+    Util::FHook("AFortGameModeAthena::StartAircraftPhase", uint64_t(0x5FA4538), StartAircraftPhase, DEFINE_OG(StartAircraftPhaseOG));
 
     if (bUsesGameSessions) {
         Util::FHook<AFortGameModeAthena>("AFortGameModeAthena::GetGameSessionClass", Addresses::GetGameSessionClassVFT, GetGameSessionClass);
     }
-
-    if (bLategame) {
-        Util::FHook("AFortGameModeAthena::OnAircraftEnteredDropZone", Addresses::OnAircraftEnteredDropZone, OnAircraftEnteredDropZone, DEFINE_OG(OnAircraftEnteredDropZoneOG));
-        Util::FHook("AFortGameModeAthena::OnAircraftExitedDropZone", Addresses::OnAircraftExitedDropZone, OnAircraftExitedDropZone, DEFINE_OG(OnAircraftExitedDropZoneOG));
-    }
+    Util::FHook("AFortGameModeAthena::OnAircraftEnteredDropZone", Addresses::OnAircraftEnteredDropZone, OnAircraftEnteredDropZone, DEFINE_OG(OnAircraftEnteredDropZoneOG));
+    Util::FHook("AFortGameModeAthena::OnAircraftExitedDropZone", Addresses::OnAircraftExitedDropZone, OnAircraftExitedDropZone, DEFINE_OG(OnAircraftExitedDropZoneOG));
 #pragma endregion
 
 #pragma region FortPlayerControllerAthena
@@ -105,14 +103,13 @@ DWORD WINAPI Main(LPVOID)
 
 #pragma region AthenaAIServicePlayerBots
     
-    //PatchUse<uint16>(Addresses::ImageBase + 0x5EE9590, uint16_t(0xe990));
+    PatchUse<uint16>(Addresses::ImageBase + 0x5EE9590, uint16_t(0xe990));
 
-    MH_CreateHook(LPVOID(Addresses::ImageBase + Addresses::SpawnAI), execSpawnAI, nullptr);
-    MH_EnableHook(LPVOID(Addresses::ImageBase + Addresses::SpawnAI));
-
-    Util::FHook("UnknownPatch - 2", 0x5EE0507, uint32_t(0x1C4C899)); // 0x7B2CDA4 - (0x5EE0504 + 7)
+    PatchUse<uint32>(Addresses::ImageBase + 0x5EE0507, uint32_t(0x1c4c899));
     MH_CreateHook(LPVOID(Addresses::ImageBase + 0x7B2CDA4), InitalizeMMRInfos, nullptr);
     MH_EnableHook(LPVOID(Addresses::ImageBase + 0x7B2CDA4));
+
+
 
     // Util::FHook("UAthenaAIServicePlayerBots::WaitForMatchAssignmentReady", uint64(0x5EE9524), WaitForMatchAssignmentReady, DEFINE_OG(WaitForMatchAssignmentReadyOG));
 #pragma endregion
@@ -144,12 +141,20 @@ DWORD WINAPI Main(LPVOID)
 #pragma region FortAthenaAISpawnerDataComponent_AIBotCosmeticBase
     Util::FHook("UFortAthenaAISpawnerDataComponent_AIBotCosmeticBase::GetDances", uint64_t(0x6A41D5C), AI::GetDances);
     Util::FHook("UFortAthenaAISpawnerDataComponent_AIBotCosmeticBase::GetLoadout", uint64_t(0x6A41DE4), AI::GetLoadout);
+    Util::FHook("UFortAthenaAISpawnerDataComponent_InventoryBase::GetInventoryItems", uint64_t(0x6A42F4C), AI::GetInventoryItems);
+    Util::FHook("UFortAthenaAISpawnerDataComponent_InventoryBase::OnSpawned", uint64_t(0x5EC8548), AI::PostOnSpawned, DEFINE_OG(AI::PostOnSpawnedOG));
 #pragma endregion
 
 #pragma region FortPickup
     Util::FHook<AFortPickupAthena>("FortPickup::GivePickupTo", uint32_t(0xDA), GivePickupTo, DEFINE_OG(GivePickupToOG));
 #pragma endregion
 
+
+#pragma region FortQuestManager
+    Util::FHook("UFortQuestManager::SendCustomStatEvent", uint64_t(0x67EA614), SendCustomStatEvent);
+    //Util::FHook("UFortQuestManager::SendCustomStatEventDirect", uint64_t(0x4DCC56C), SendCustomStatEventDirect) needs a exec hook I think;
+    Util::FHook("UFortQuestManager::SendComplexCustomStatEvent", uint64_t(0x67EA55C), SendComplexCustomStatEvent);
+#pragma endregion
 
     FString MapName = bCreative ? L"open Creative_NoApollo_Terrain" : L"open Artemis_Terrain";
 
@@ -159,24 +164,41 @@ DWORD WINAPI Main(LPVOID)
     UKismetSystemLibrary::ExecuteConsoleCommand(GetWorld(), L"log LogFortInventory all", nullptr);
     UKismetSystemLibrary::ExecuteConsoleCommand(GetWorld(), L"log LogFortWorld", nullptr);
     UKismetSystemLibrary::ExecuteConsoleCommand(GetWorld(), L"log LogFortMutatorInventoryOverride all", nullptr);
-    UKismetSystemLibrary::ExecuteConsoleCommand(GetWorld(), L"log LogFort all", nullptr);
+    UKismetSystemLibrary::ExecuteConsoleCommand(GetWorld(), L"log LogFort Verbose", nullptr);
     UKismetSystemLibrary::ExecuteConsoleCommand(GetWorld(), L"log LogFortInvServiceComp all", nullptr);
     UKismetSystemLibrary::ExecuteConsoleCommand(GetWorld(), L"log LogFortPlayerRegistration all");
     UKismetSystemLibrary::ExecuteConsoleCommand(GetWorld(), L"log LogStreaming");
     UKismetSystemLibrary::ExecuteConsoleCommand(GetWorld(), L"log LogOnlineGame all");
     UKismetSystemLibrary::ExecuteConsoleCommand(GetWorld(), L"log LogAthenaAIServiceBots all");
     UKismetSystemLibrary::ExecuteConsoleCommand(GetWorld(), L"log LogStats all");
-    UKismetSystemLibrary::ExecuteConsoleCommand(GetWorld(), L"log LogAbilitySystem");
     UKismetSystemLibrary::ExecuteConsoleCommand(GetWorld(), L"log LogHotfixManager all");
     UKismetSystemLibrary::ExecuteConsoleCommand(GetWorld(), L"log LogOnlineSession all");
     UKismetSystemLibrary::ExecuteConsoleCommand(GetWorld(), L"log LogMatchmakingServiceDedicatedServer all");
-    //UKismetSystemLibrary::ExecuteConsoleCommand(GetWorld(), L"log LogAbilitySystem all");
     UKismetSystemLibrary::ExecuteConsoleCommand(GetWorld(), L"log LogGameplayTags all");
     UKismetSystemLibrary::ExecuteConsoleCommand(GetWorld(), L"log LogJson all");
     UKismetSystemLibrary::ExecuteConsoleCommand(GetWorld(), L"log LogOnlineSession all");
-    UKismetSystemLibrary::ExecuteConsoleCommand(GetWorld(), L"log LogFortAI all");
-    UKismetSystemLibrary::ExecuteConsoleCommand(GetWorld(), L"log LogAISpawnerData all");
-    UKismetSystemLibrary::ExecuteConsoleCommand(GetWorld(), L"log LogFortPickup Verbose");
+    UKismetSystemLibrary::ExecuteConsoleCommand(GetWorld(), L"log LogFortDayNight all");
+    UKismetSystemLibrary::ExecuteConsoleCommand(GetWorld(), L"log LogLivingWorldManager all");
+    UKismetSystemLibrary::ExecuteConsoleCommand(GetWorld(), L"log LogFortAI Verbose");
+    UKismetSystemLibrary::ExecuteConsoleCommand(GetWorld(), L"log LogFortAbility Verbose");
+    UKismetSystemLibrary::ExecuteConsoleCommand(GetWorld(), L"log LogAIPerception Verbose");
+    //UKismetSystemLibrary::ExecuteConsoleCommand(GetWorld(), L"log logAthenaBots Verbose");
+    //UKismetSystemLibrary::ExecuteConsoleCommand(GetWorld(), L"log lognavigation verbose");
+    UKismetSystemLibrary::ExecuteConsoleCommand(GetWorld(), L"log LogCharacter verbose");
+    UKismetSystemLibrary::ExecuteConsoleCommand(GetWorld(), L"log LogBehaviorTree Verbose");
+    UKismetSystemLibrary::ExecuteConsoleCommand(GetWorld(), L"log LogPathFollowing Verbose");
+    UKismetSystemLibrary::ExecuteConsoleCommand(GetWorld(), L"log LogPawnAction verbose");
+	UKismetSystemLibrary::ExecuteConsoleCommand(GetWorld(), L"log LogFortAIDirector Verbose");
+    UKismetSystemLibrary::ExecuteConsoleCommand(GetWorld(), L"log LogFortReplicationGraph");
+    UKismetSystemLibrary::ExecuteConsoleCommand(GetWorld(), L"log LogFortQuest all");
+    UKismetSystemLibrary::ExecuteConsoleCommand(GetWorld(), L"log logOnline");
+    UKismetSystemLibrary::ExecuteConsoleCommand(GetWorld(), L"log LogPlayerQuestProgress VeryVerbose");
+    UKismetSystemLibrary::ExecuteConsoleCommand(GetWorld(), L"log LogFortQuestObjective VeryVerbose");
+    UKismetSystemLibrary::ExecuteConsoleCommand(GetWorld(), L"log LogAISpawner VeryVerbose");
+    UKismetSystemLibrary::ExecuteConsoleCommand(GetWorld(), L"log LogAbilitySystem");
+
+    if (bDisableAI)
+        UKismetSystemLibrary::ExecuteConsoleCommand(GetWorld(), L"Phoebe.Enabled 0");
 
     GetWorld()->OwningGameInstance->LocalPlayers.Remove(0);
     return 0;

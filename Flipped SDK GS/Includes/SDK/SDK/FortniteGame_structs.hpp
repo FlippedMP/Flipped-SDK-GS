@@ -16240,7 +16240,7 @@ struct alignas(0x08) FMMRSpawningInfo final
 public:
 	float BotSpawningDataInfoTargetELO;
 	float BotSpawningDataInfoWeight;
-	float NumBotsToSpawn;
+	int NumBotsToSpawn;
 	class TSubclassOf<class UFortAthenaAISpawnerData> AISpawnerData;
 	uint8_t SpawnedCallbacks[0x10];
 };
@@ -16260,7 +16260,8 @@ struct FMMRSpawningPlayerBotsRuntimeInfo final : public FMMRSpawningBaseRuntimeI
 public:
 	uint8                                         Pad_10[0x10];                                      // 0x0010(0x0010)(Fixing Size After Last Property [ Dumper-7 ])
 	TArray<struct FMMRSpawningInfo>               SpawningInfos;                                     // 0x0020(0x0010)(ZeroConstructor, Transient, NativeAccessSpecifierPublic)
-	uint8                                         Pad_30[0x8];                                       // 0x0030(0x0008)(Fixing Struct Size After Last Property [ Dumper-7 ])
+	int TotalSpawningInfoWeight;
+	int CachedTotalAmountToSpawnComputed;
 };
 
 // ScriptStruct FortniteGame.FortVoteConfig

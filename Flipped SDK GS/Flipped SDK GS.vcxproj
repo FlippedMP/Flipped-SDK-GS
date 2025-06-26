@@ -149,10 +149,12 @@
     <ClInclude Include="Core\AI.h" />
     <ClInclude Include="Core\Inventory.h" />
     <ClInclude Include="Core\Looting.h" />
+    <ClInclude Include="Core\Quests.h" />
     <ClInclude Include="Includes\SDK\PropertyFixup.hpp" />
     <ClInclude Include="Includes\SDK\SDK.hpp" />
     <ClInclude Include="Includes\SDK\UnrealContainers.hpp" />
     <ClInclude Include="Includes\SDK\UtfN.hpp" />
+    <ClInclude Include="Other\Logger.h" />
     <ClInclude Include="Other\Memory.h" />
     <ClInclude Include="Other\Framework.h" />
     <ClInclude Include="Core\Hooks.h" />

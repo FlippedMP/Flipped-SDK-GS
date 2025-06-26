@@ -48,6 +48,12 @@
     <ClInclude Include="Core\AI.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="Core\Quests.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="Other\Logger.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="dllmain.cpp">

@@ -21,6 +21,20 @@ void (*TickFlushOG)(UNetDriver*); void TickFlush(UNetDriver* Driver) {
 		FTransform Transform = Driver->ClientConnections[0]->PlayerController->Pawn->GetTransform();
 		AI::SpawnKlombo(Transform, 1);
 	}
+
+	if (GetAsyncKeyState(VK_F8) & 1) {
+		static int Index = 0;
+		auto TimeOfDayManager = AFortTimeOfDayManager::GetTimeOfDayManagerFromContext(UWorld::GetWorld());
+		if (TimeOfDayManager) {
+			TimeOfDayManager->DisableGlobalWeatherEvents = false;
+			TimeOfDayManager->WeatherComponent->bWeatherDisabled = false;
+			static void (*StartWeatherEvent)(UFortTimeOfDayWeatherComponent * Comp) = decltype(StartWeatherEvent)(Addresses::ImageBase + 0x6272D98);
+			StartWeatherEvent(TimeOfDayManager->WeatherComponent);
+		}
+		else {
+			printf("NO TODM");
+		}
+	}
 	
 	TickFlushOG(Driver); 
 }
@@ -37,81 +51,66 @@ static void LoadLateGameLoadouts()
 #pragma region ARS
 	static UFortWeaponRangedItemDefinition* GreenARDefinition = Native::StaticLoadObject<UFortWeaponRangedItemDefinition>("/Game/Athena/Items/Weapons/WID_Assault_Auto_Athena_UC_Ore_T03.WID_Assault_Auto_Athena_UC_Ore_T03");
 	int Count = 1;
-	int LoadedAmmo = Inventory::GetClipSize(GreenARDefinition);
 	FLategameLoadout GreenAR{};
 	GreenAR.Count = Count;
-	GreenAR.LoadedAmmo = LoadedAmmo;
 	GreenAR.Definition = GreenARDefinition;
 	ARLoadouts.push_back(GreenAR);
 	static UFortWeaponRangedItemDefinition* BlueARDefinition = Native::StaticLoadObject<UFortWeaponRangedItemDefinition>("/Game/Athena/Items/Weapons/WID_Assault_Auto_Athena_R_Ore_T03.WID_Assault_Auto_Athena_R_Ore_T03");
-	LoadedAmmo = Inventory::GetClipSize(BlueARDefinition);
 	FLategameLoadout BlueAR{};
 	BlueAR.Count = Count;
-	BlueAR.LoadedAmmo = LoadedAmmo;
 	BlueAR.Definition = BlueARDefinition;
 	ARLoadouts.push_back(BlueAR);
 	static UFortWeaponRangedItemDefinition* PurpleScarDefinition = Native::StaticLoadObject<UFortWeaponRangedItemDefinition>("/Game/Athena/Items/Weapons/WID_Assault_AutoHigh_Athena_VR_Ore_T03.WID_Assault_AutoHigh_Athena_VR_Ore_T03");
-	LoadedAmmo = Inventory::GetClipSize(PurpleScarDefinition);
 	FLategameLoadout PurpleScar{};
 	PurpleScar.Count = Count;
-	PurpleScar.LoadedAmmo = LoadedAmmo;
 	PurpleScar.Definition = PurpleScarDefinition;
 	ARLoadouts.push_back(PurpleScar);
 	static UFortWeaponRangedItemDefinition* GoldenScarDefinition = Native::StaticLoadObject<UFortWeaponRangedItemDefinition>("/Game/Athena/Items/Weapons/WID_Assault_AutoHigh_Athena_SR_Ore_T03.WID_Assault_AutoHigh_Athena_SR_Ore_T03");
 	FLategameLoadout GoldenScar{};
 	GoldenScar.Count = Count;
-	GoldenScar.LoadedAmmo = LoadedAmmo;
 	GoldenScar.Definition = GoldenScarDefinition;
 	ARLoadouts.push_back(GoldenScar);
 #pragma endregion
 
 #pragma region SHOTGUNS
 	static UFortWeaponRangedItemDefinition* BluePumpDefinition = Native::StaticLoadObject<UFortWeaponRangedItemDefinition>("/Game/Athena/Items/Weapons/WID_Shotgun_Standard_Athena_UC_Ore_T03.WID_Shotgun_Standard_Athena_UC_Ore_T03");
-	LoadedAmmo = Inventory::GetClipSize(BluePumpDefinition);
-	FLategameLoadout BluePump{ BluePumpDefinition, Count, LoadedAmmo };
+	FLategameLoadout BluePump{ BluePumpDefinition, Count };
 	ShotgunLoadouts.push_back(BluePump);
 	static UFortWeaponRangedItemDefinition* PurplePumpDefinition = Native::StaticLoadObject<UFortWeaponRangedItemDefinition>("/Game/Athena/Items/Weapons/WID_Shotgun_Standard_Athena_VR_Ore_T03.WID_Shotgun_Standard_Athena_VR_Ore_T03");
-	LoadedAmmo = Inventory::GetClipSize(PurplePumpDefinition);
-	FLategameLoadout PurplePump{ PurplePumpDefinition, Count, LoadedAmmo };
+	FLategameLoadout PurplePump{ PurplePumpDefinition, Count};
 	ShotgunLoadouts.push_back(PurplePump);
 	static UFortWeaponRangedItemDefinition* GoldenPumpDefinition = Native::StaticLoadObject<UFortWeaponRangedItemDefinition>("/Game/Athena/Items/Weapons/WID_Shotgun_Standard_Athena_SR_Ore_T03.WID_Shotgun_Standard_Athena_SR_Ore_T03");
-	LoadedAmmo = Inventory::GetClipSize(GoldenPumpDefinition);
-	FLategameLoadout GoldenPump{ GoldenPumpDefinition, Count, LoadedAmmo };
+	FLategameLoadout GoldenPump{ GoldenPumpDefinition, Count};
 	ShotgunLoadouts.push_back(GoldenPump);
 #pragma endregion
 
 #pragma region THIRDSLOT
 	static UFortWeaponRangedItemDefinition* BlueSMGDefinition = Native::StaticLoadObject<UFortWeaponRangedItemDefinition>("/Game/Athena/Items/Weapons/WID_Pistol_AutoHeavyPDW_Athena_R_Ore_T03.WID_Pistol_AutoHeavyPDW_Athena_R_Ore_T03");
-	LoadedAmmo = Inventory::GetClipSize(BlueSMGDefinition);
-	FLategameLoadout BlueSMG{ BlueSMGDefinition, Count, LoadedAmmo };
+	FLategameLoadout BlueSMG{ BlueSMGDefinition, Count};
 	SMGLoadouts.push_back(BlueSMG);
 	static UFortWeaponRangedItemDefinition* PurpleSMGDefinition = Native::StaticLoadObject<UFortWeaponRangedItemDefinition>("/Game/Athena/Items/Weapons/WID_Pistol_AutoHeavyPDW_Athena_VR_Ore_T03.WID_Pistol_AutoHeavyPDW_Athena_VR_Ore_T03");
-	LoadedAmmo = Inventory::GetClipSize(PurpleSMGDefinition);
-	FLategameLoadout PurpleSMG{ PurpleSMGDefinition, Count, LoadedAmmo };
+	FLategameLoadout PurpleSMG{ PurpleSMGDefinition, Count};
 	SMGLoadouts.push_back(PurpleSMG);
 	static UFortWeaponRangedItemDefinition* GoldenSMGDefinition = Native::StaticLoadObject<UFortWeaponRangedItemDefinition>("/Game/Athena/Items/Weapons/WID_Pistol_AutoHeavyPDW_Athena_SR_Ore_T03.WID_Pistol_AutoHeavyPDW_Athena_SR_Ore_T03");
-	LoadedAmmo = Inventory::GetClipSize(GoldenSMGDefinition);
-	FLategameLoadout GoldenSMG{ GoldenSMGDefinition, Count, LoadedAmmo };
+	FLategameLoadout GoldenSMG{ GoldenSMGDefinition, Count };
 	SMGLoadouts.push_back(GoldenSMG);
 	static UFortWeaponRangedItemDefinition* FlintKnockDefinition = Native::StaticLoadObject<UFortWeaponRangedItemDefinition>("/Game/Athena/Items/Weapons/WID_Pistol_Flintlock_Athena_UC.WID_Pistol_Flintlock_Athena_UC");
-	LoadedAmmo = Inventory::GetClipSize(FlintKnockDefinition);
-	FLategameLoadout FlintLock{ FlintKnockDefinition, Count, LoadedAmmo };
+	FLategameLoadout FlintLock{ FlintKnockDefinition, Count };
 	SMGLoadouts.push_back(FlintLock);
 #pragma endregion
 
 #pragma region FIRSTCONSUMABLE
 	static UFortItemDefinition* RiftToGoDefinition = Native::StaticLoadObject<UFortItemDefinition>("/Game/Athena/Items/Consumables/RiftItem/Athena_Rift_Item.Athena_Rift_Item");
-	LoadedAmmo = 0;
 	Count = Inventory::GetMaxStackSize(RiftToGoDefinition);
-	FLategameLoadout RiftToGo{ RiftToGoDefinition, Count, LoadedAmmo };
+	FLategameLoadout RiftToGo{ RiftToGoDefinition, Count };
 	FirstConsumableSlotLoadouts.push_back(RiftToGo);
 	static UFortItemDefinition* ChugSplashDefinition = Native::StaticLoadObject<UFortItemDefinition>("/Game/Athena/Items/Consumables/ChillBronco/Athena_ChillBronco.Athena_ChillBronco");
 	Count = 6;
-	FLategameLoadout ChugSplash{ ChugSplashDefinition, Count, LoadedAmmo };
+	FLategameLoadout ChugSplash{ ChugSplashDefinition, Count };
 	FirstConsumableSlotLoadouts.push_back(ChugSplash);
 	static UFortItemDefinition* SlurpJuiceDefinition = Native::StaticLoadObject<UFortItemDefinition>("/Game/Athena/Items/Consumables/PurpleStuff/Athena_PurpleStuff.Athena_PurpleStuff");
 	Count = Inventory::GetMaxStackSize(SlurpJuiceDefinition);
-	FLategameLoadout SlurpJuice{ SlurpJuiceDefinition, Count, LoadedAmmo };
+	FLategameLoadout SlurpJuice{ SlurpJuiceDefinition, Count };
 	FirstConsumableSlotLoadouts.push_back(SlurpJuice);
 #pragma endregion
 
@@ -292,12 +291,17 @@ bool ReadyToStartMatch(AFortGameModeAthena* thisPtr)
 				WarmupActors.Free();
 			}
 
-
-
 			static UDataTable* AthenaRangedWeapons = Native::StaticLoadObject<UDataTable>("/Game/Athena/Items/Weapons/AthenaRangedWeapons.AthenaRangedWeapons");
 			Misc::ApplyDataTablePatch(AthenaRangedWeapons);
 
 
+			float TimeSeconds = UGameplayStatics::GetTimeSeconds(GetWorld());
+			float Duration = 120.f;
+
+			GameState->WarmupCountdownEndTime = TimeSeconds + Duration;
+			thisPtr->WarmupCountdownDuration = Duration;
+			GameState->WarmupCountdownStartTime = TimeSeconds;
+			thisPtr->WarmupEarlyCountdownDuration = Duration;
 
 
 			SET_TITLE("Flipped 19.10 - Listening!");
@@ -621,24 +625,6 @@ void ServerLoadingScreenDropped(AFortPlayerControllerAthena* thisPtr)
 		printf("Item: %s\n", PhoneItemDef->GetFullName().c_str());
 		Inventory::AddItem(thisPtr, PhoneItemDef);
 	}
-
-
-	static bool bFirst = false;
-	if (!bFirst) {
-		AI::SpawnPhoebeAI(1);
-
-
-		UClass* Class = Native::StaticLoadObject<UClass>("/ButterCake/Pawns/NPC_Pawn_ButterCake_B.NPC_Pawn_ButterCake_B_C");
-		if (!Class) {
-			printf("No Class");
-		}
-		UBehaviorTree* Tree = Native::StaticLoadObject<UBehaviorTree>("/ButterCake/BehaviorTree/BT_ButterCake.BT_ButterCake");
-		if (!Tree) {
-			printf("No Tree");
-		}
-		ANPC_Pawn_Wildlife_Parent_C* Dih = (ANPC_Pawn_Wildlife_Parent_C*)UAIBlueprintHelperLibrary::SpawnAIFromClass(UWorld::GetWorld(), Class, Tree, FVector(1, 1, 10000), {}, false, nullptr);
-	}
-	
 }
 
 void ServerExecuteInventoryItem(AFortPlayerControllerAthena* thisPtr, const FGuid& ItemGUID)
@@ -669,27 +655,14 @@ void ServerExecuteInventoryItem(AFortPlayerControllerAthena* thisPtr, const FGui
 }
 
 void GetPlayerViewPointHook(AFortPlayerControllerAthena* PC, FVector& Location, FRotator& Rotation) {
-	if (PC->StateName == UKismetStringLibrary::Conv_StringToName(L"Spectating"))
+	if (PC && PC->StateName == UKismetStringLibrary::Conv_StringToName(L"Spectating"))
 	{
 		Location = PC->LastSpectatorSyncLocation;
 		Rotation = PC->LastSpectatorSyncRotation;
 	}
-	else if (PC->PlayerCameraManager && PC->PlayerCameraManager->CameraCache.Timestamp > 0.f) {
-		Location = PC->PlayerCameraManager->CameraCache.POV.Location;
-		Rotation = PC->PlayerCameraManager->CameraCache.POV.Rotation;
-	}
-	else {
-		AActor* TheViewTarget = PC->GetViewTarget();
-		if (TheViewTarget)
-		{
-			Location = TheViewTarget->K2_GetActorLocation();
-			Rotation = TheViewTarget->K2_GetActorRotation();
-		}
-		else {
-			if (PC->Pawn) {
-				PC->Pawn->GetActorEyesViewPoint(&Location, &Rotation);
-			}
-		}
+	else if (PC) {
+		Location = PC->GetViewTarget()->K2_GetActorLocation();
+		Rotation = PC->GetControlRotation();
 	}
 }
 
@@ -914,16 +887,30 @@ void CreateAndConfigureNavSystem(UAthenaNavSystemConfig* Config, UWorld* World)
 void InitalizeMMRInfos(UAthenaAIServicePlayerBots* thisPtr)
 {
 	FLIPPED_LOG("Called");
-	auto AIService = UAthenaAIBlueprintLibrary::GetAIServicePlayerBots(UWorld::GetWorld());
-	AIService->DefaultBotAISpawnerData = Native::StaticLoadObject<UClass>("/Game/Athena/AI/Phoebe/BP_AISpawnerData_Phoebe.BP_AISpawnerData_Phoebe_C");
+	printf("AISERVICE: %s", thisPtr->GetFullName().c_str());
+
+	UAthenaAIServicePlayerBots* AIServicePlayerBots = UAthenaAIBlueprintLibrary::GetAIServicePlayerBots(UWorld::GetWorld());
+
+	AIServicePlayerBots->DefaultBotAISpawnerData = Native::StaticLoadObject<UClass>("/Game/Athena/AI/Phoebe/BP_AISpawnerData_Phoebe.BP_AISpawnerData_Phoebe_C");
+
+	printf("%s", AIServicePlayerBots->DefaultBotAISpawnerData->GetFullName().c_str());
 
 	FMMRSpawningInfo NewSpawningInfo{};
-	NewSpawningInfo.BotSpawningDataInfoTargetELO = 1000.f; // todo: get proper value
-	NewSpawningInfo.BotSpawningDataInfoWeight = 100.f; // todo: get proper value
-	NewSpawningInfo.NumBotsToSpawn = 70;
-	NewSpawningInfo.AISpawnerData = thisPtr->DefaultBotAISpawnerData;
+	NewSpawningInfo.BotSpawningDataInfoTargetELO = 1000.f;
+	NewSpawningInfo.BotSpawningDataInfoWeight = 100.f;
+	NewSpawningInfo.NumBotsToSpawn = 15;
+	NewSpawningInfo.AISpawnerData = AIServicePlayerBots->DefaultBotAISpawnerData;
 
-	thisPtr->CachedMMRSpawningInfo.SpawningInfos.Add(NewSpawningInfo);
+	AIServicePlayerBots->DefaultAISpawnerDataComponentList = UFortAthenaAISpawnerData::CreateComponentListFromClass(AIServicePlayerBots->DefaultBotAISpawnerData, UWorld::GetWorld());
+	AIServicePlayerBots->CachedMMRSpawningInfo.SpawningInfos.Add(NewSpawningInfo);
+	AIServicePlayerBots->GamePhaseToStartSpawning = EAthenaGamePhase::Warmup;
+
+	printf("CachedFoundations: %d\n", AIServicePlayerBots->CachedBuildingFoundations.Num());
+
+	printf("POI: %d\n", AIServicePlayerBots->CachedValidPOIVolumeLocations.Num());
+
+	printf("Dih: %d\n", AIServicePlayerBots->GamePhaseToStartSpawning);
+
 }
 
 void WaitForMatchAssignmentReady(UAthenaAIServicePlayerBots* thisPtr, __int64 FlowHandle)
@@ -1007,19 +994,19 @@ void ServerAttemptAircraftJump(UFortControllerComponent_Aircraft* thisPtr, const
 	{
 		int32 ArLoadoutIndex = UKismetMathLibrary::RandomIntegerInRange(0, ARLoadouts.size() - 1);
 		FLategameLoadout* ARLoadout = &ARLoadouts.at(ArLoadoutIndex);
-		Inventory::AddItem(Controller, ARLoadout->Definition, ARLoadout->Count, ARLoadout->LoadedAmmo);
+		Inventory::AddItem(Controller, ARLoadout->Definition, ARLoadout->Count);
 		int32 ShotgunLoadoutIndex = UKismetMathLibrary::RandomIntegerInRange(0, ShotgunLoadouts.size() - 1);
 		FLategameLoadout* ShotgunLoadout = &ShotgunLoadouts.at(ShotgunLoadoutIndex);
-		Inventory::AddItem(Controller, ShotgunLoadout->Definition, ShotgunLoadout->Count, ShotgunLoadout->LoadedAmmo);
+		Inventory::AddItem(Controller, ShotgunLoadout->Definition, ShotgunLoadout->Count);
 		int32 SMGLoadoutIndex = UKismetMathLibrary::RandomIntegerInRange(0, SMGLoadouts.size() - 1);
 		FLategameLoadout* thirdSlot = &SMGLoadouts.at(SMGLoadoutIndex);
-		Inventory::AddItem(Controller, thirdSlot->Definition, thirdSlot->Count, thirdSlot->LoadedAmmo);
+		Inventory::AddItem(Controller, thirdSlot->Definition, thirdSlot->Count);
 		int32 FirstConsumableIndex = UKismetMathLibrary::RandomIntegerInRange(0, FirstConsumableSlotLoadouts.size() - 1);
 		FLategameLoadout* FirstConsumable = &FirstConsumableSlotLoadouts.at(FirstConsumableIndex);
-		Inventory::AddItem(Controller, FirstConsumable->Definition, FirstConsumable->Count, FirstConsumable->LoadedAmmo);
+		Inventory::AddItem(Controller, FirstConsumable->Definition, FirstConsumable->Count);
 		int32 SecondConsumableIndex = UKismetMathLibrary::RandomIntegerInRange(0, SecondConsumableSlotLoadouts.size() - 1);
 		FLategameLoadout* SecondConsumable = &SecondConsumableSlotLoadouts.at(SecondConsumableIndex);
-		Inventory::AddItem(Controller, SecondConsumable->Definition, SecondConsumable->Count, SecondConsumable->LoadedAmmo);
+		Inventory::AddItem(Controller, SecondConsumable->Definition, SecondConsumable->Count);
 
 		//AMMO
 		static UFortItemDefinition* HeavyBullets = Native::StaticLoadObject<UFortItemDefinition>("/Game/Athena/Items/Ammo/AthenaAmmoDataBulletsHeavy.AthenaAmmoDataBulletsHeavy");
@@ -1051,7 +1038,7 @@ void ServerAttemptAircraftJump(UFortControllerComponent_Aircraft* thisPtr, const
 
 void OnAircraftEnteredDropZone(AFortGameModeAthena* thisPtr, AFortAthenaAircraft* Aircraft)
 {
-	if (!thisPtr || !Aircraft)
+	if (!thisPtr || !Aircraft || !bLategame)
 		return OnAircraftEnteredDropZoneOG(thisPtr, Aircraft);
 
 	AFortGameStateAthena* GameState = Util::Cast<AFortGameStateAthena>(thisPtr->GameState);
@@ -1075,6 +1062,9 @@ void OnAircraftEnteredDropZone(AFortGameModeAthena* thisPtr, AFortAthenaAircraft
 
 void OnAircraftExitedDropZone(AFortGameModeAthena* thisPtr, AFortAthenaAircraft* Aircraft)
 {
+	UAthenaAIServicePlayerBots* AIServicePlayerBots = UAthenaAIBlueprintLibrary::GetAIServicePlayerBots(UWorld::GetWorld());
+	if (!bLategame)
+		return OnAircraftExitedDropZoneOG(thisPtr, Aircraft);
 	auto GameState = Util::Cast<AFortGameStateAthena>(thisPtr->GameState);
 
 	auto PlayerControllers = UFortKismetLibrary::GetAllFortPlayerControllers(UWorld::GetWorld(), true, false);
@@ -1420,7 +1410,7 @@ void TeleportPlayerToLinkedVolume(AFortAthenaCreativePortal* Context, FFrame* St
 }
 
 void ServerGiveCreativeItem(AFortPlayerControllerAthena* Controller, FFortItemEntry& ItemEntry) {
-	Inventory::AddItem(Controller, ItemEntry.ItemDefinition, ItemEntry.Count, ItemEntry.LoadedAmmo);
+	Inventory::AddItem(Controller, ItemEntry.ItemDefinition, ItemEntry.Count);
 }
 
 void (*ServerPlayEmoteItemOG)(AFortPlayerControllerAthena* PC, UFortMontageItemDefinitionBase* EmoteAsset);
@@ -1500,13 +1490,21 @@ void OnCapsuleBeginOverlapHook(AFortPlayerPawnAthena* Context, FFrame* Stack, vo
 
 	typedef ABGA_RiftPortal_Item_Athena_C Paster;
 
-	if (OtherActor && OtherActor->IsA(AFortPickupAthena::StaticClass()) && Util::Cast<AFortPickupAthena>(OtherActor)->bWeaponsCanBeAutoPickups) {
-		FFortPickupRequestInfo Info{};
-		Info.bPlayPickupSound = false;
-		Info.bIsAutoPickup = true;
-		Info.bIsVisualOnlyPickup = false;
-		Info.FlyTime = 0.4;
-		Context->ServerHandlePickupInfo(Util::Cast<AFortPickupAthena>(OtherActor), Info);
+	if (OtherActor && OtherActor->IsA(AFortPickupAthena::StaticClass())) {
+		AFortPickupAthena* Pickup = Util::Cast<AFortPickupAthena>(OtherActor);
+		if (Pickup->PawnWhoDroppedPickup != Context)
+		{
+			if (!Pickup->PrimaryPickupItemEntry.ItemDefinition)
+				return;
+			if (Inventory::GetQuickbar(Pickup->PrimaryPickupItemEntry.ItemDefinition) != EFortQuickBars::Primary) {
+				FFortPickupRequestInfo Info{};
+				Info.bPlayPickupSound = false;
+				Info.bIsAutoPickup = true;
+				Info.bIsVisualOnlyPickup = false;
+				Info.FlyTime = 0.4;
+				Context->ServerHandlePickupInfo(Pickup, Info);
+			}
+		}
 	}
 	else if (OtherActor && OtherActor->IsA(Paster::StaticClass())) {
 		auto RiftPortal = (Paster*)OtherActor;
@@ -1518,7 +1516,7 @@ void OnCapsuleBeginOverlapHook(AFortPlayerPawnAthena* Context, FFrame* Stack, vo
 		printf("ExecPtr: %p\n", Func->ExecFunction);
 	}
 	else if (OtherActor) {
-		printf("OtherActor: %s\n", OtherActor->GetFullName().c_str());
+		//printf("OtherActor: %s\n", OtherActor->GetFullName().c_str());
 	}
 }
 
@@ -1578,9 +1576,6 @@ char ShouldAbilityRespondToEvent(__int64 a1, FFrame* a2, char* a3) {
 }
 
 void ServerHandlePickupInfo(AFortPlayerPawn* Pawn, AFortPickup* Pickup, FFortPickupRequestInfo& RequestInfo) {
-	auto Distance = Pickup->GetDistanceTo(Pawn);
-	if (Distance <= 50)
-		Util::Cast<AFortPlayerControllerAthena>(Pawn->GetController())->ClientReturnToMainMenu(L"Being a diddy blud hacker");
 	Pickup->PickupLocationData.bPlayPickupSound = RequestInfo.bPlayPickupSound;
 	Pickup->PickupLocationData.FlyTime = 0.4f;
 	Pickup->PickupLocationData.ItemOwner = Pawn;
@@ -1596,33 +1591,101 @@ void GivePickupTo(AFortPickup* thisPtr, IFortInventoryOwnerInterface* Interface,
 	UObject* (*GetObjectByAddress)(void* Interface) = decltype(GetObjectByAddress)(Interface->VTable[0x1]);
 	AFortPlayerControllerAthena* Object = (AFortPlayerControllerAthena*)GetObjectByAddress(Interface);
 	printf("InterfaceObject: %s\n", Object->GetName().c_str());
+	printf("Ptr: %p\n", Interface->VTable);
+	if (Object->IsA(AFortAthenaAIBotController::StaticClass())) return GivePickupToOG(thisPtr, Interface, DestroyAfterPickup);
+	if (!Object->MyFortPawn) return GivePickupToOG(thisPtr, Interface, DestroyAfterPickup);
 
-	if (!Object->MyFortPawn || Util::Cast<AFortPlayerPawnAthena>(Object->MyFortPawn)->IsBotControlled()) return;
-	if (Object->IsA(AFortAthenaAIBotController::StaticClass())) return;
+	FFortItemEntry* PickupEntryPtr = &thisPtr->PrimaryPickupItemEntry;
+	FGuid ItemGuid = Object->MyFortPawn->CurrentWeapon->ItemEntryGuid;
+	FGuid PreviousItemGuid = Object->MyFortPawn->PreviousWeapon ? Object->MyFortPawn->PreviousWeapon->ItemEntryGuid : FGuid();
+	int32 PrimaryQuickbarItems = Inventory::GetNumQuickBarItems(Object);
+	auto Instance = Inventory::GetItemFromGUID(Object, ItemGuid);
+	auto PreviousInstance = Inventory::GetItemFromGUID(Object, PreviousItemGuid);
+	UFortItemDefinition* ItemToDrop = Instance->ItemEntry.ItemDefinition;
+	UFortItemDefinition* PreviousItem = PreviousInstance ? PreviousInstance->ItemEntry.ItemDefinition : nullptr;
 
-	UFortItemDefinition* NewItem = thisPtr->PrimaryPickupItemEntry.ItemDefinition;
-	UFortItemDefinition* WeaponData = Object->MyFortPawn->CurrentWeapon->WeaponData;
-
-	int NumQuickBarItems = Inventory::GetNumQuickBarItems(Object);
-
-	printf("NumQuickBarItems: %d\n", NumQuickBarItems);
-
-	if (WeaponData->IsA(UFortWeaponMeleeItemDefinition::StaticClass()) && NumQuickBarItems >= 5) {
-		return; //For Now, later we need to make it drop the pickup
+	if (Inventory::GetQuickbar(PickupEntryPtr->ItemDefinition) != EFortQuickBars::Primary) {
+		Inventory::AddItem(Object, PickupEntryPtr);
 	}
-
-	UFortWorldItem* Found = Object->WorldInventory->Inventory.ItemInstances.FindByPredicate([&](UFortWorldItem* Item) {
-		return Item->ItemEntry.ItemDefinition == WeaponData;
-	});
-
-	if (!Found) {
-		printf("Failed to find CurrentWeapon item");
-		return;
+	else if (PrimaryQuickbarItems < 5) {
+		Inventory::AddItem(Object, PickupEntryPtr);
 	}
-
-	if (NewItem->IsStackable() && Inventory::GetQuickbar(NewItem) != EFortQuickBars::Primary) {
-		Inventory::AddItem(Object, NewItem, thisPtr->PrimaryPickupItemEntry.Count);
+	else {
+		if (ItemToDrop && ItemToDrop->IsA(UFortWeaponMeleeItemDefinition::StaticClass())) {
+			//printf("Should Not happen\n");
+			printf("PrevItem: %s\n", PreviousItem->GetName().c_str());
+			FSpawnPickupData Data{};
+			Data.ItemDefinition = PreviousItem;
+			Data.Count = PreviousInstance->ItemEntry.Count;
+			Data.Location = Object->MyFortPawn->K2_GetActorLocation();
+			Data.PickupOwner = Object->MyFortPawn;
+			Data.FortPickupSourceTypeFlag = EFortPickupSourceTypeFlag::Player;
+			Data.FortPickupSpawnSource = EFortPickupSpawnSource::Unset;
+			Inventory::SpawnPickup(Data);
+			Inventory::RemoveItem(Object, PreviousItemGuid, PreviousInstance->ItemEntry.Count);
+			Inventory::AddItem(Object, PickupEntryPtr);
+		}
+		else if (ItemToDrop) {
+			FSpawnPickupData Data{};
+			Data.ItemDefinition = ItemToDrop;
+			Data.Count = Instance->ItemEntry.Count;
+			Data.Location = Object->MyFortPawn->K2_GetActorLocation();
+			Data.PickupOwner = Object->MyFortPawn;
+			Data.FortPickupSourceTypeFlag = EFortPickupSourceTypeFlag::Player;
+			Data.FortPickupSpawnSource = EFortPickupSpawnSource::Unset;
+			Inventory::SpawnPickup(Data);
+			Inventory::RemoveItem(Object, ItemGuid, Instance->ItemEntry.Count);
+			Inventory::AddItem(Object, PickupEntryPtr);
+		}
 	}
 
 	GivePickupToOG(thisPtr, Interface, DestroyAfterPickup);
+}
+
+void (*StartAircraftPhaseOG)(AFortGameModeAthena* GameMode, bool a2);
+void StartAircraftPhase(AFortGameModeAthena* GameMode, bool a2) {
+	StartAircraftPhaseOG(GameMode, a2);
+	UAthenaAIServicePlayerBots* AIService = UAthenaAIBlueprintLibrary::GetAIServicePlayerBots(UWorld::GetWorld());
+	if (AIService) {
+		if (AIService->CachedGameState && AIService->CachedAIPopulationTracker) {
+			for (auto& PlayerBot : AIService->PlayerBots) {
+				if (PlayerBot.BotController) {
+					auto Aircraft = AIService->CachedGameState->Aircrafts[0];
+					//printf("Teleporting %s to aircraft\n", PlayerBot.BotController->GetName().c_str());
+					Native::EnterAircraft(PlayerBot.BotController, Aircraft);
+				}
+			}
+		}
+	}
+}
+
+void SendCustomStatEvent(UFortQuestManager* QuestManager, const FDataTableRowHandle& ObjectiveStat, int32 Count, bool bForceFlush) {
+	UE_LOG(LogFlipped, Log, "SendCustomStatEvent called with ObjectiveStat: %s, Count: %d, bForceFlush: %d", 
+		ObjectiveStat.DataTable->GetName().c_str(), Count, bForceFlush);
+
+}
+
+void SendCustomStatEventDirect(UFortQuestManager* QuestManager, FName ObjectiveBackendName, UFortQuestItem* QuestItem, int32 Count, bool bForceFlush) {
+	UE_LOG(LogFlipped, Log, "SendCustomStatEventDirect called with ObjectiveBackendName: %s, QuestItem: %s, Count: %d, bForceFlush: %d", 
+		ObjectiveBackendName.ToString().c_str(), QuestItem ? QuestItem->GetName().c_str() : "None", Count, bForceFlush);
+}
+
+void SendComplexCustomStatEvent(UFortQuestManager* QuestManger, UObject* TargetObject, const FGameplayTagContainer& AdditionalSourceTags, const FGameplayTagContainer& TargetTags, bool* QuestActive, bool* QuestCompleted, int32 Count) {
+	UE_LOG(LogFlipped, Log, "SendComplexCustomStatEvent called with TargetObject: %s, AdditionalSourceTags: %s, TargetTags: %s, QuestActive: %d, QuestCompleted: %d, Count: %d", 
+		TargetObject ? TargetObject->GetName().c_str() : "None", 
+		AdditionalSourceTags.ToString().c_str(),
+		TargetTags.ToString().c_str(),
+		false, 
+		false, 
+		Count);
+}
+
+void SendCustomStatEventWithTags(UFortQuestManager* QuestManager, EFortQuestObjectiveStatEvent Type, const struct FGameplayTagContainer& AdditionalSourceTags, const struct FGameplayTagContainer& TargetTags, bool* QuestActive, bool* QuestCompleted, int32 Count) {
+	UE_LOG(LogFlipped, Log, "SendCustomStatEventWithTags called with Type: %d, AdditionalSourceTags: %s, TargetTags: %s, QuestActive: %d, QuestCompleted: %d, Count: %d", 
+		static_cast<int>(Type), 
+		AdditionalSourceTags.ToString().c_str(), 
+		TargetTags.ToString().c_str(), 
+		false, 
+		false, 
+		Count);
 }

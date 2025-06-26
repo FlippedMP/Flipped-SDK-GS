@@ -143,4 +143,6 @@ namespace Native
 
 	FGameplayAbilitySpecHandle*(*GiveAbilityAndActivateOnce)(UAbilitySystemComponent*, int*, FGameplayAbilitySpec*, FGameplayEventData*)
 		= decltype(GiveAbilityAndActivateOnce)(Addresses::ImageBase + 0x4e01290);
+
+	inline void (*EnterAircraft)(AFortAthenaAIBotController*, AFortAthenaAircraft*) = decltype(EnterAircraft)(Addresses::ImageBase + 0x5CE165C);
 }

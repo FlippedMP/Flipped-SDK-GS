@@ -52,7 +52,7 @@ namespace AI
 
 
 	void GetDances(UFortAthenaAISpawnerDataComponent_AIBotCosmeticBase* thisPtr, TArray<UAthenaDanceItemDefinition*>* Dances, const AFortAthenaAIBotController* Controller) {
-		printf(__FUNCTION__"\n");
+		//printf(__FUNCTION__"\n");
 		static std::vector<UAthenaDanceItemDefinition*> DanceArray;
 
 		if (DanceArray.empty()) {
@@ -62,11 +62,35 @@ namespace AI
 		for (UAthenaDanceItemDefinition* Dance : DanceArray) {
 			Dances->Add(Dance);
 		}
+
+		//printf("BT: %s\n", Controller->BehaviorTree->GetFullName().c_str());
 	}
 
+	std::vector<UAthenaCharacterItemDefinition*> ChosenCharacters;
+
 	void GetLoadout(UFortAthenaAISpawnerDataComponent_AIBotCosmeticBase* thisPtr, FFortAthenaLoadout* OutLoadout) {
-		printf(__FUNCTION__"\n");
 		OutLoadout->Character = Misc::GetRandomCharacter();
-		printf("Character: %s\n", OutLoadout->Character);
+		ChosenCharacters.push_back(OutLoadout->Character);
+	}
+
+	void GetInventoryItems(UFortAthenaAISpawnerDataComponent_InventoryBase* thisPtr, TArray<FItemAndCount>* OutList) {
+		auto GameMode = (AFortGameModeAthena*)UWorld::GetWorld()->AuthorityGameMode;
+		for (auto& StartingItem : GameMode->StartingItems) {
+			if (StartingItem.Item->GetFullName().contains("Smart")) {
+				OutList->Add(StartingItem);
+			}
+		}
+
+		FItemAndCount ItemAndCount{};
+		ItemAndCount.Item = UObject::FindObject<UAthenaPickaxeItemDefinition>("AthenaPickaxeItemDefinition DefaultPickaxe.DefaultPickaxe")->WeaponDefinition;
+		ItemAndCount.Count = 1;
+		OutList->Add(ItemAndCount);
+	}
+
+	void (*PostOnSpawnedOG)(UFortAthenaAISpawnerDataComponent_InventoryBase*, AFortAIPawn*);
+	void PostOnSpawned(UFortAthenaAISpawnerDataComponent_InventoryBase* thisPtr, AFortAIPawn* PawnAI) {
+		AFortAthenaAIBotController* Controller = Util::Cast<AFortAthenaAIBotController>(PawnAI->Controller);
+		Controller->Inventory = Misc::SpawnActor<AFortInventory>({},{}, Controller);
+		PostOnSpawnedOG(thisPtr, PawnAI);
 	}
 }

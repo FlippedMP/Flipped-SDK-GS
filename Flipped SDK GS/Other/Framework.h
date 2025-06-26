@@ -8,10 +8,14 @@
 #include <thread>
 #include <map>
 #include <numeric>
+#include <chrono>
+#include <type_traits>
+#include <mutex>
 #include "../Includes/SDK/SDK.hpp"
 using namespace SDK;
 #include "../Includes/MinHook/MinHook.h"
 #include "Memory.h"
+#include "Logger.h"
 
 // ts looks like a magma gs with this many random shit in here! :skull:
 
@@ -26,6 +30,7 @@ static FName NAME_GameNetDriver = UKismetStringLibrary::Conv_StringToName(L"Game
 static bool bUsesGameSessions = false;
 static constexpr bool bLategame = false;
 static constexpr bool bCreative = false;
+static constexpr bool bDisableAI = true;
 
 enum EHookType
 {
@@ -207,7 +212,6 @@ struct FLategameLoadout
 {
 	UFortItemDefinition* Definition;
 	int32 Count;
-	int32 LoadedAmmo;
 };
 
 inline std::vector<FLategameLoadout> ARLoadouts;
@@ -336,7 +340,8 @@ namespace Misc
 
 	UCurveTable* GetGameData()
 	{
-		return Native::StaticFindObject<UCurveTable>("/Game/Athena/Balance/DataTables/AthenaGameData.AthenaGameData");
+		auto GameState = Util::Cast<AFortGameStateAthena>(UWorld::GetWorld()->GameState);
+		return GameState->AthenaGameDataTable;
 	}
 
 	void ApplyDataTablePatch(UDataTable* DataTable)
@@ -452,4 +457,18 @@ static __forceinline void PatchUse(uintptr_t ptr, _Is byte)
 	VirtualProtect(LPVOID(ptr), sizeof(_Is), PAGE_EXECUTE_READWRITE, &og);
 	*(_Is*)ptr = byte;
 	VirtualProtect(LPVOID(ptr), sizeof(_Is), og, &og);
+}
+
+void VirtualHookInternal(void** _VTable, uint32_t _Index, void* _Detour, void** _OG = nullptr)
+{
+	if (_VTable)
+	{
+		DWORD oldProtect;
+		VirtualProtect(&_VTable[_Index], sizeof(void*), 0x40, &oldProtect);
+		if (_OG)
+			*_OG = _VTable[_Index];
+
+		_VTable[_Index] = _Detour;
+		VirtualProtect(&_VTable[_Index], sizeof(void*), oldProtect, &oldProtect);
+	}
 }

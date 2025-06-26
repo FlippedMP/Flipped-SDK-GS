@@ -150,10 +150,25 @@ namespace Inventory
 
 		float Val = Definition->MaxStackSize.Value;
 
-		if (Val <= 0) {
-			UDataTableFunctionLibrary::EvaluateCurveTableRow(Definition->MaxStackSize.Curve.CurveTable, Definition->MaxStackSize.Curve.RowName, 0, nullptr, &Val, {});
+		printf("PrevVal: %f\n", Val);
+
+		printf("RowName: %s\n", Definition->MaxStackSize.Curve.RowName.ToString().c_str());
+
+		if (Val <= 1) {
+			FSimpleCurve* Curve = nullptr;
+			static UCurveTable* AthenaGameData = Misc::GetGameData();
+			for (auto& [Key, Value] : AthenaGameData->GetRowMap()) {
+				if (Key == Definition->MaxStackSize.Curve.RowName) {
+					Curve = (FSimpleCurve*)Value;
+					break;
+				}
+			}
+
+			if (Curve)
+				Val = Curve->Keys[0].Value;
 		}
 
+		printf("ItemDef %s has %f StackSize\n", Definition->GetFullName().c_str(), Val);
 		return Val;
 	}
 
@@ -164,7 +179,7 @@ namespace Inventory
 	}
 
 	/* this needs WAY more checks but my brain power isnt enough anymore to do good inv funcs, maybe ill paste for an old gs */
-	UFortWorldItem* AddItem(AFortPlayerControllerAthena* Controller, UFortItemDefinition* Definition, int Count = 1, int LoadedAmmo = 0) {
+	UFortWorldItem* AddItem(AFortPlayerControllerAthena* Controller, UFortItemDefinition* Definition, int Count = 1) {
 		if (!Controller || !Controller->WorldInventory || !Definition)
 			return nullptr;
 
@@ -181,13 +196,9 @@ namespace Inventory
 				int MaxStackSize = GetMaxStackSize(Definition);
 				for (int i = 0; i < Controller->WorldInventory->Inventory.ItemInstances.Num(); i++) {
 					UFortWorldItem* IndexedItem = Controller->WorldInventory->Inventory.ItemInstances[i];
-
-					if (IndexedItem->ItemEntry.Count == MaxStackSize)
-						continue;
-
 					if (IndexedItem->ItemEntry.ItemDefinition == Definition) {
 						Item->ItemEntry.Count += IndexedItem->ItemEntry.Count;
-						if (Item->ItemEntry.Count > Definition->MaxStackSize.Value) {
+						if (Item->ItemEntry.Count > MaxStackSize) {
 							int AmountToRemove = Item->ItemEntry.Count - round(MaxStackSize);
 							Item->ItemEntry.Count -= AmountToRemove;
 							if (Controller->MyFortPawn) {
@@ -234,6 +245,10 @@ namespace Inventory
 		}
 	}
 
+	UFortWorldItem* AddItem(AFortPlayerControllerAthena* Controller, FFortItemEntry* ItemEntryPtr) {
+		return AddItem(Controller, ItemEntryPtr->ItemDefinition, ItemEntryPtr->Count);
+	}
+
 	void RemoveItem(AFortPlayerControllerAthena* Controller, UFortItemDefinition* Definition, int Count = -1) {
 		if (!Controller || !Definition)
 			return;
@@ -249,7 +264,7 @@ namespace Inventory
 						if (!Instance && j == Controller->WorldInventory->Inventory.ItemInstances.Num() - 1)
 							return;
 
-						if (Instance->ItemEntry.ItemDefinition == Definition) {
+						if (Instance && Instance->ItemEntry.ItemDefinition == Definition) {
 							Controller->WorldInventory->Inventory.ItemInstances.Remove(j);
 							Controller->WorldInventory->Inventory.MarkArrayDirty();
 							break;
@@ -266,7 +281,7 @@ namespace Inventory
 							if (!Instance && j == Controller->WorldInventory->Inventory.ItemInstances.Num() - 1)
 								return;
 
-							if (Instance->ItemEntry.ItemDefinition == Definition) {
+							if (Instance && Instance->ItemEntry.ItemDefinition == Definition) {
 								Controller->WorldInventory->Inventory.ItemInstances.Remove(j);
 								Controller->WorldInventory->Inventory.MarkArrayDirty();
 								break;
@@ -320,7 +335,7 @@ namespace Inventory
 							if (!Instance && j == Controller->WorldInventory->Inventory.ItemInstances.Num() - 1)
 								return;
 
-							if (Instance->ItemEntry.ItemGuid == ItemGUID) {
+							if (Instance && Instance->ItemEntry.ItemGuid == ItemGUID) {
 								Controller->WorldInventory->Inventory.ItemInstances.Remove(j);
 								Controller->WorldInventory->Inventory.MarkArrayDirty();
 								break;
@@ -390,5 +405,16 @@ namespace Inventory
 		}
 
 		return Num;
+	}
+
+	std::vector<FFortItemEntry*> GetMatchingItems(AFortPlayerControllerAthena* Object, UFortItemDefinition* Def) {
+		std::vector<FFortItemEntry*> Entries;
+		for (auto& Instance : Object->WorldInventory->Inventory.ItemInstances) {
+			if (Instance->ItemEntry.ItemDefinition == Def) {
+				Entries.push_back(&Instance->ItemEntry);
+			}
+		}
+
+		return Entries;
 	}
 }

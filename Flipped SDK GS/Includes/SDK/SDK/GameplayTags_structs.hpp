@@ -69,6 +69,15 @@ struct FGameplayTag
 {
 public:
 	class FName                                   TagName;                                           // 0x0000(0x0008)(Edit, ZeroConstructor, EditConst, SaveGame, IsPlainOldData, NoDestructor, Protected, HasGetValueTypeHash, NativeAccessSpecifierProtected)
+
+	FORCEINLINE bool operator==(const FGameplayTag& Other) const
+	{
+		return TagName == Other.TagName;
+	}
+
+	FORCEINLINE std::string ToString() const {
+		return TagName.ToString();
+	}
 };
 
 // ScriptStruct GameplayTags.GameplayTagContainer
@@ -78,6 +87,43 @@ struct FGameplayTagContainer final
 public:
 	TArray<struct FGameplayTag>                   GameplayTags;                                      // 0x0000(0x0010)(Edit, BlueprintVisible, ZeroConstructor, EditConst, SaveGame, Protected, NativeAccessSpecifierProtected)
 	TArray<struct FGameplayTag>                   ParentTags;                                        // 0x0010(0x0010)(ZeroConstructor, Transient, Protected, NativeAccessSpecifierProtected)
+
+	FORCEINLINE bool HasTag(const struct FGameplayTag& TagToCheck) const
+	{
+		return GameplayTags.Contains(TagToCheck) || ParentTags.Contains(TagToCheck);
+	}
+
+	FORCEINLINE bool IsValid() const
+	{
+		return GameplayTags.Num() > 0;
+	}
+
+	FORCEINLINE bool IsEmpty() const
+	{
+		return GameplayTags.Num() == 0;
+	}
+
+	FORCEINLINE std::string ToString() const
+	{
+		std::string Result;
+		for (const auto& Tag : GameplayTags)
+		{
+			if (!Result.empty())
+			{
+				Result += ", \n";
+			}
+			Result += Tag.ToString();
+		}
+		for (const auto& ParentTag : ParentTags)
+		{
+			if (!Result.empty())
+			{
+				Result += ", \n";
+			}
+			Result += ParentTag.ToString();
+		}
+		return Result;
+	}
 };
 
 // ScriptStruct GameplayTags.GameplayTagReferenceHelper

@@ -329,15 +329,17 @@ namespace UC
 		}
 
 		template<typename Predicate>
-		ArrayElementType FindByPredicate(Predicate Pred) {
+		const ArrayElementType* FindByPredicate(Predicate Pred) {
 			for (int32_t i = 0; i < Num(); i++) {
 				if (Pred(GetData()[i])) {
-					return GetData()[i];
+					return &GetData()[i];
 				}
 			}
+
+			return nullptr;
 		}
 
-		inline bool Contains(const ArrayElementType& Element)
+		inline bool Contains(const ArrayElementType& Element) const
 		{
 			for (int i = 0; i < NumElements; i++)
 			{
