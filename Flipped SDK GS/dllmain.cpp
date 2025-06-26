@@ -59,13 +59,16 @@ DWORD WINAPI Main(LPVOID)
     Util::FHook("AFortGameModeAthena::ReadyToStartMatch", Addresses::ReadyToStartMatch, ReadyToStartMatch);
     Util::FHook("AFortGameModeAthena::SpawnDefaultPawnFor", Addresses::SpawnDefaultPawnFor, SpawnDefaultPawnFor);
     Util::FHook("AFortGameModeAthena::StartNewSafeZonePhase", Addresses::StartNewSafeZonePhase, StartNewSafeZonePhase, DEFINE_OG(StartNewSafeZonePhaseOG));
-    Util::FHook("AFortGameModeAthena::StartAircraftPhase", uint64_t(0x5FA4538), StartAircraftPhase, DEFINE_OG(StartAircraftPhaseOG));
+    //Util::FHook("AFortGameModeAthena::StartAircraftPhase", uint64_t(0x5FA4538), StartAircraftPhase, DEFINE_OG(StartAircraftPhaseOG));
 
     if (bUsesGameSessions) {
         Util::FHook<AFortGameModeAthena>("AFortGameModeAthena::GetGameSessionClass", Addresses::GetGameSessionClassVFT, GetGameSessionClass);
     }
-    Util::FHook("AFortGameModeAthena::OnAircraftEnteredDropZone", Addresses::OnAircraftEnteredDropZone, OnAircraftEnteredDropZone, DEFINE_OG(OnAircraftEnteredDropZoneOG));
-    Util::FHook("AFortGameModeAthena::OnAircraftExitedDropZone", Addresses::OnAircraftExitedDropZone, OnAircraftExitedDropZone, DEFINE_OG(OnAircraftExitedDropZoneOG));
+    if (bLategame) {
+        Util::FHook("AFortGameModeAthena::OnAircraftEnteredDropZone", Addresses::OnAircraftEnteredDropZone, OnAircraftEnteredDropZone, DEFINE_OG(OnAircraftEnteredDropZoneOG));
+        Util::FHook("AFortGameModeAthena::OnAircraftExitedDropZone", Addresses::OnAircraftExitedDropZone, OnAircraftExitedDropZone, DEFINE_OG(OnAircraftExitedDropZoneOG));
+    }
+
 #pragma endregion
 
 #pragma region FortPlayerControllerAthena
@@ -147,7 +150,7 @@ DWORD WINAPI Main(LPVOID)
 
 #pragma region FortPickup
     Util::FHook<AFortPickupAthena>("AFortPickup::GivePickupTo", uint32_t(0xDA), GivePickupTo, DEFINE_OG(GivePickupToOG));
-    IFortInventoryOwnerInterface* InventoryOwner = (IFortInventoryOwnerInterface*)Native::GetInterfaceAddress(AFortWeapon::GetDefaultObj(), IFortInventoryOwnerInterface::StaticClass());
+    IFortInventoryOwnerInterface* InventoryOwner = (IFortInventoryOwnerInterface*)Native::GetInterfaceAddress(AFortPlayerControllerAthena::GetDefaultObj(), IFortInventoryOwnerInterface::StaticClass());
     VirtualHookInternal(InventoryOwner->VTable, 0x2F, RemoveInventoryItem);
 #pragma endregion
 

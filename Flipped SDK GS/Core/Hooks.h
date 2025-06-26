@@ -101,7 +101,7 @@ static void LoadLateGameLoadouts()
 
 #pragma region FIRSTCONSUMABLE
 	static UFortItemDefinition* RiftToGoDefinition = Native::StaticLoadObject<UFortItemDefinition>("/Game/Athena/Items/Consumables/RiftItem/Athena_Rift_Item.Athena_Rift_Item");
-	Count = Inventory::GetMaxStackSize(RiftToGoDefinition);
+	Count = 2;
 	FLategameLoadout RiftToGo{ RiftToGoDefinition, Count };
 	FirstConsumableSlotLoadouts.push_back(RiftToGo);
 	static UFortItemDefinition* ChugSplashDefinition = Native::StaticLoadObject<UFortItemDefinition>("/Game/Athena/Items/Consumables/ChillBronco/Athena_ChillBronco.Athena_ChillBronco");
@@ -109,7 +109,7 @@ static void LoadLateGameLoadouts()
 	FLategameLoadout ChugSplash{ ChugSplashDefinition, Count };
 	FirstConsumableSlotLoadouts.push_back(ChugSplash);
 	static UFortItemDefinition* SlurpJuiceDefinition = Native::StaticLoadObject<UFortItemDefinition>("/Game/Athena/Items/Consumables/PurpleStuff/Athena_PurpleStuff.Athena_PurpleStuff");
-	Count = Inventory::GetMaxStackSize(SlurpJuiceDefinition);
+	Count = 3;
 	FLategameLoadout SlurpJuice{ SlurpJuiceDefinition, Count };
 	FirstConsumableSlotLoadouts.push_back(SlurpJuice);
 #pragma endregion
@@ -477,22 +477,6 @@ void StartNewSafeZonePhase(AFortGameModeAthena* GameMode, int32_t OverrideSafeZo
 				UDataTableFunctionLibrary::EvaluateCurveTableRow(FortGameData, HoldTimeFName, i, nullptr,
 					&GameState->MapInfo->SafeZoneDefinition.WaitTimeCached[i], {});
 			}
-			for (int i = 0; i < GameState->MapInfo->SafeZoneDefinition.ForceDistanceMinCached.Num(); i++) {
-				UDataTableFunctionLibrary::EvaluateCurveTableRow(GameState->MapInfo->SafeZoneDefinition.ForceDistanceMin.Curve.CurveTable,
-					GameState->MapInfo->SafeZoneDefinition.ForceDistanceMin.Curve.RowName, i, nullptr, &GameState->MapInfo->SafeZoneDefinition.ForceDistanceMinCached[i], {});
-			}
-			for (int i = 0; i < GameState->MapInfo->SafeZoneDefinition.RadiusChunked.Num(); i++) {
-				UDataTableFunctionLibrary::EvaluateCurveTableRow(GameState->MapInfo->SafeZoneDefinition.Radius.Curve.CurveTable,
-					GameState->MapInfo->SafeZoneDefinition.Radius.Curve.RowName, i, nullptr, &GameState->MapInfo->SafeZoneDefinition.RadiusChunked[i], {});
-			}
-			for (int i = 0; i < GameState->MapInfo->SafeZoneDefinition.ForceDistanceMaxCached.Num(); i++) {
-				UDataTableFunctionLibrary::EvaluateCurveTableRow(GameState->MapInfo->SafeZoneDefinition.ForceDistanceMax.Curve.CurveTable,
-					GameState->MapInfo->SafeZoneDefinition.ForceDistanceMax.Curve.RowName, i, nullptr, &GameState->MapInfo->SafeZoneDefinition.ForceDistanceMaxCached[i], {});
-			}
-			for (int i = 0; i < GameState->MapInfo->SafeZoneDefinition.MegaStormGridCellThicknessCached.Num(); i++) {
-				UDataTableFunctionLibrary::EvaluateCurveTableRow(GameState->MapInfo->SafeZoneDefinition.MegaStormGridCellThickness.Curve.CurveTable,
-					GameState->MapInfo->SafeZoneDefinition.MegaStormGridCellThickness.Curve.RowName, i, nullptr, &GameState->MapInfo->SafeZoneDefinition.MegaStormGridCellThicknessCached[i], {});
-			}
 		}
 
 		bDih = true;
@@ -543,9 +527,10 @@ void ServerAcknowledgePossession(AFortPlayerControllerAthena* thisPtr, AFortPlay
 		return;
 
 	AFortGameModeAthena* GameMode = (AFortGameModeAthena*)UWorld::GetWorld()->AuthorityGameMode;
-
-	PlayerState->HeroType = thisPtr->CosmeticLoadoutPC.Character->HeroDefinition;
-	UFortKismetLibrary::UpdatePlayerCustomCharacterPartsVisualization(PlayerState);
+	if (thisPtr->CosmeticLoadoutPC.Character) {
+		PlayerState->HeroType = thisPtr->CosmeticLoadoutPC.Character ? thisPtr->CosmeticLoadoutPC.Character->HeroDefinition : nullptr;
+		UFortKismetLibrary::UpdatePlayerCustomCharacterPartsVisualization(PlayerState);
+	}
 }
 
 void ServerLoadingScreenDropped(AFortPlayerControllerAthena* thisPtr) 
@@ -1672,21 +1657,12 @@ void SendCustomStatEventDirect(UFortQuestManager* QuestManager, FName ObjectiveB
 
 void SendComplexCustomStatEvent(UFortQuestManager* QuestManager, UObject* TargetObject, const FGameplayTagContainer& AdditionalSourceTags, const FGameplayTagContainer& TargetTags, bool* QuestActive, bool* QuestCompleted, int32 Count) {
 	UE_LOG(LogFlipped, Log, "SendComplexCustomStatEvent called with TargetObject: %s\n, AdditionalSourceTags: %s\n, TargetTags: %s\n, QuestActive: %d\n, QuestCompleted: %d\n, Count: %d\n", 
-		TargetObject ? TargetObject->GetName().c_str() : "None", 
+		"None", 
 		AdditionalSourceTags.ToString().c_str(),
 		TargetTags.ToString().c_str(),
 		false, 
 		false, 
 		Count);
-
-	TArray<UFortQuestItem*> QuestItems;
-	QuestManager->GetCurrentQuests(&QuestItems);
-
-	if (QuestItems.Num() > 0) {
-		for (auto& QuestItem : QuestItems) {
-			UE_LOG(LogFlipped, Log, "QuestItem: %s\n, GameplayTags %s", QuestItem->GetName().c_str(), QuestItem->ItemDefinition->GameplayTags.ToString().c_str());
-		}
-	}
 }
 
 void SendCustomStatEventWithTags(UFortQuestManager* QuestManager, EFortQuestObjectiveStatEvent Type, const struct FGameplayTagContainer& AdditionalSourceTags, const struct FGameplayTagContainer& TargetTags, bool* QuestActive, bool* QuestCompleted, int32 Count) {
@@ -1701,7 +1677,14 @@ void SendCustomStatEventWithTags(UFortQuestManager* QuestManager, EFortQuestObje
 
 }
 
-void RemoveInventoryItem(IFortInventoryOwnerInterface* thisPtr, FGuid Guid, int a3, bool a4, bool a5) {
-	UE_LOG(LogFlipped, Log, "RemoveInventoryItem called with Count: %d, bNotifyPlayer: %d, bForceRemove: %d", 
-		a3, a4, a5);
+void RemoveInventoryItem(IFortInventoryOwnerInterface* thisPtr, FGuid Guid, int a3, bool bForceRemoveFromQuickBars, bool bForceRemoval) {
+	UE_LOG(LogFlipped, Log, "RemoveInventoryItem called with Count: %d, bForceRemoveFromQuickBars: %d, bForceRemoval: %d", 
+		a3, bForceRemoveFromQuickBars, bForceRemoval);
+	UObject* (*GetObjectByAddress)(void* Interface) = decltype(GetObjectByAddress)(thisPtr->VTable[0x1]);
+	AFortPlayerControllerAthena* PlayerController = Util::Cast<AFortPlayerControllerAthena>(GetObjectByAddress(thisPtr));
+	if (!PlayerController) {
+		return;
+	}
+
+	Inventory::RemoveItem(PlayerController, Guid, a3);
 }
