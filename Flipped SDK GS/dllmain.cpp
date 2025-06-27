@@ -156,51 +156,59 @@ DWORD WINAPI Main(LPVOID)
 
 
 #pragma region FortQuestManager
-    Util::FHook("UFortQuestManager::SendCustomStatEvent", uint64_t(0x67EA614), SendCustomStatEvent);
-    //Util::FHook("UFortQuestManager::SendCustomStatEventDirect", uint64_t(0x4DCC56C), SendCustomStatEventDirect) needs a exec hook I think;
-    Util::FHook("UFortQuestManager::SendComplexCustomStatEvent", uint64_t(0x67EA55C), SendComplexCustomStatEvent);
 #pragma endregion
+
+	Util::FHook("ABuildingActor::OnDamageServer", uint64_t(0x69E3008), OnDamageServer, DEFINE_OG(OnDamageServerOG));
+
+    Util::FHook<AFortPlayerControllerAthena>("AFortPlayerControllerAthena::ServerClientIsReadyToRespawn", uint32_t(0x553), ServerClientIsReadyToRespawn);
 
     FString MapName = bCreative ? L"open Creative_NoApollo_Terrain" : L"open Artemis_Terrain";
 
     UKismetSystemLibrary::ExecuteConsoleCommand(GetWorld(), MapName, nullptr);
-    UKismetSystemLibrary::ExecuteConsoleCommand(GetWorld(), L"log LogFortUIDirector", nullptr);
-    UKismetSystemLibrary::ExecuteConsoleCommand(GetWorld(), L"log LogQos", nullptr);
-    UKismetSystemLibrary::ExecuteConsoleCommand(GetWorld(), L"log LogFortInventory all", nullptr);
-    UKismetSystemLibrary::ExecuteConsoleCommand(GetWorld(), L"log LogFortWorld", nullptr);
-    UKismetSystemLibrary::ExecuteConsoleCommand(GetWorld(), L"log LogFortMutatorInventoryOverride all", nullptr);
-    UKismetSystemLibrary::ExecuteConsoleCommand(GetWorld(), L"log LogFort Verbose", nullptr);
-    UKismetSystemLibrary::ExecuteConsoleCommand(GetWorld(), L"log LogFortInvServiceComp all", nullptr);
-    UKismetSystemLibrary::ExecuteConsoleCommand(GetWorld(), L"log LogFortPlayerRegistration all");
-    UKismetSystemLibrary::ExecuteConsoleCommand(GetWorld(), L"log LogStreaming");
-    UKismetSystemLibrary::ExecuteConsoleCommand(GetWorld(), L"log LogOnlineGame all");
-    UKismetSystemLibrary::ExecuteConsoleCommand(GetWorld(), L"log LogAthenaAIServiceBots all");
-    UKismetSystemLibrary::ExecuteConsoleCommand(GetWorld(), L"log LogStats all");
-    UKismetSystemLibrary::ExecuteConsoleCommand(GetWorld(), L"log LogHotfixManager all");
-    UKismetSystemLibrary::ExecuteConsoleCommand(GetWorld(), L"log LogOnlineSession all");
-    UKismetSystemLibrary::ExecuteConsoleCommand(GetWorld(), L"log LogMatchmakingServiceDedicatedServer all");
-    UKismetSystemLibrary::ExecuteConsoleCommand(GetWorld(), L"log LogGameplayTags all");
-    UKismetSystemLibrary::ExecuteConsoleCommand(GetWorld(), L"log LogJson all");
-    UKismetSystemLibrary::ExecuteConsoleCommand(GetWorld(), L"log LogOnlineSession all");
-    UKismetSystemLibrary::ExecuteConsoleCommand(GetWorld(), L"log LogFortDayNight all");
-    UKismetSystemLibrary::ExecuteConsoleCommand(GetWorld(), L"log LogLivingWorldManager all");
-    UKismetSystemLibrary::ExecuteConsoleCommand(GetWorld(), L"log LogFortAI Verbose");
-    UKismetSystemLibrary::ExecuteConsoleCommand(GetWorld(), L"log LogFortAbility Verbose");
-    UKismetSystemLibrary::ExecuteConsoleCommand(GetWorld(), L"log LogAIPerception Verbose");
-    //UKismetSystemLibrary::ExecuteConsoleCommand(GetWorld(), L"log logAthenaBots Verbose");
-    //UKismetSystemLibrary::ExecuteConsoleCommand(GetWorld(), L"log lognavigation verbose");
-    UKismetSystemLibrary::ExecuteConsoleCommand(GetWorld(), L"log LogCharacter verbose");
-    UKismetSystemLibrary::ExecuteConsoleCommand(GetWorld(), L"log LogBehaviorTree Verbose");
-    UKismetSystemLibrary::ExecuteConsoleCommand(GetWorld(), L"log LogPathFollowing Verbose");
-    UKismetSystemLibrary::ExecuteConsoleCommand(GetWorld(), L"log LogPawnAction verbose");
-	UKismetSystemLibrary::ExecuteConsoleCommand(GetWorld(), L"log LogFortAIDirector Verbose");
-    UKismetSystemLibrary::ExecuteConsoleCommand(GetWorld(), L"log LogFortReplicationGraph");
-    UKismetSystemLibrary::ExecuteConsoleCommand(GetWorld(), L"log LogFortQuest all");
-    UKismetSystemLibrary::ExecuteConsoleCommand(GetWorld(), L"log logOnline");
-    UKismetSystemLibrary::ExecuteConsoleCommand(GetWorld(), L"log LogPlayerQuestProgress VeryVerbose");
-    UKismetSystemLibrary::ExecuteConsoleCommand(GetWorld(), L"log LogFortQuestObjective VeryVerbose");
-    UKismetSystemLibrary::ExecuteConsoleCommand(GetWorld(), L"log LogAISpawner VeryVerbose");
-    UKismetSystemLibrary::ExecuteConsoleCommand(GetWorld(), L"log LogAbilitySystem");
+    if (bLog) {
+        UKismetSystemLibrary::ExecuteConsoleCommand(GetWorld(), L"log LogFortUIDirector", nullptr);
+        UKismetSystemLibrary::ExecuteConsoleCommand(GetWorld(), L"log LogQos", nullptr);
+        UKismetSystemLibrary::ExecuteConsoleCommand(GetWorld(), L"log LogFortInventory all", nullptr);
+        UKismetSystemLibrary::ExecuteConsoleCommand(GetWorld(), L"log LogFortWorld", nullptr);
+        UKismetSystemLibrary::ExecuteConsoleCommand(GetWorld(), L"log LogFortMutatorInventoryOverride all", nullptr);
+        UKismetSystemLibrary::ExecuteConsoleCommand(GetWorld(), L"log LogFort Verbose", nullptr);
+        UKismetSystemLibrary::ExecuteConsoleCommand(GetWorld(), L"log LogFortInvServiceComp all", nullptr);
+        UKismetSystemLibrary::ExecuteConsoleCommand(GetWorld(), L"log LogFortPlayerRegistration all");
+        UKismetSystemLibrary::ExecuteConsoleCommand(GetWorld(), L"log LogStreaming");
+        UKismetSystemLibrary::ExecuteConsoleCommand(GetWorld(), L"log LogOnlineGame all");
+        UKismetSystemLibrary::ExecuteConsoleCommand(GetWorld(), L"log LogAthenaAIServiceBots all");
+        UKismetSystemLibrary::ExecuteConsoleCommand(GetWorld(), L"log LogStats all");
+        UKismetSystemLibrary::ExecuteConsoleCommand(GetWorld(), L"log LogHotfixManager all");
+        UKismetSystemLibrary::ExecuteConsoleCommand(GetWorld(), L"log LogOnlineSession all");
+        UKismetSystemLibrary::ExecuteConsoleCommand(GetWorld(), L"log LogMatchmakingServiceDedicatedServer all");
+        UKismetSystemLibrary::ExecuteConsoleCommand(GetWorld(), L"log LogGameplayTags all");
+        UKismetSystemLibrary::ExecuteConsoleCommand(GetWorld(), L"log LogJson all");
+        UKismetSystemLibrary::ExecuteConsoleCommand(GetWorld(), L"log LogOnlineSession all");
+        UKismetSystemLibrary::ExecuteConsoleCommand(GetWorld(), L"log LogFortDayNight all");
+        UKismetSystemLibrary::ExecuteConsoleCommand(GetWorld(), L"log LogLivingWorldManager all");
+        UKismetSystemLibrary::ExecuteConsoleCommand(GetWorld(), L"log LogFortAI Verbose");
+        UKismetSystemLibrary::ExecuteConsoleCommand(GetWorld(), L"log LogFortAbility Verbose");
+        UKismetSystemLibrary::ExecuteConsoleCommand(GetWorld(), L"log LogAIPerception Verbose");
+        //UKismetSystemLibrary::ExecuteConsoleCommand(GetWorld(), L"log logAthenaBots Verbose");
+        //UKismetSystemLibrary::ExecuteConsoleCommand(GetWorld(), L"log lognavigation verbose");
+        UKismetSystemLibrary::ExecuteConsoleCommand(GetWorld(), L"log LogCharacter verbose");
+        UKismetSystemLibrary::ExecuteConsoleCommand(GetWorld(), L"log LogBehaviorTree Verbose");
+        UKismetSystemLibrary::ExecuteConsoleCommand(GetWorld(), L"log LogPathFollowing Verbose");
+        UKismetSystemLibrary::ExecuteConsoleCommand(GetWorld(), L"log LogPawnAction verbose");
+        UKismetSystemLibrary::ExecuteConsoleCommand(GetWorld(), L"log LogFortAIDirector Verbose");
+        UKismetSystemLibrary::ExecuteConsoleCommand(GetWorld(), L"log LogFortReplicationGraph");
+        UKismetSystemLibrary::ExecuteConsoleCommand(GetWorld(), L"log LogFortQuest all");
+        UKismetSystemLibrary::ExecuteConsoleCommand(GetWorld(), L"log logOnline");
+        UKismetSystemLibrary::ExecuteConsoleCommand(GetWorld(), L"log LogPlayerQuestProgress VeryVerbose");
+        UKismetSystemLibrary::ExecuteConsoleCommand(GetWorld(), L"log LogFortQuestObjective VeryVerbose");
+        UKismetSystemLibrary::ExecuteConsoleCommand(GetWorld(), L"log LogAISpawner VeryVerbose");
+        UKismetSystemLibrary::ExecuteConsoleCommand(GetWorld(), L"log LogAbilitySystem");
+    }
+    else {
+        UKismetSystemLibrary::ExecuteConsoleCommand(GetWorld(), L"log off");
+        UKismetSystemLibrary::ExecuteConsoleCommand(GetWorld(), L"log LogFortUIDirector", nullptr);
+    }
+
 
     if (bDisableAI)
         UKismetSystemLibrary::ExecuteConsoleCommand(GetWorld(), L"Phoebe.Enabled 0");

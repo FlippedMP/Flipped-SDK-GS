@@ -155,7 +155,7 @@ bool ReadyToStartMatch(AFortGameModeAthena* thisPtr)
 	if (thisPtr->CurrentPlaylistId == -1)
 	{
 		if (UFortPlaylistAthena* Playlist =
-			UObject::FindObject<UFortPlaylistAthena>(bCreative ? "FortPlaylistAthena Playlist_PlaygroundV2.Playlist_PlaygroundV2" : "FortPlaylistAthena Playlist_DefaultSolo.Playlist_DefaultSolo"))
+			UObject::FindObject<UFortPlaylistAthena>(bCreative ? "FortPlaylistAthena Playlist_PlaygroundV2.Playlist_PlaygroundV2" : "FortPlaylistAthena Playlist_Playground.Playlist_Playground"))
 		{
 			SetPlaylist(thisPtr, Playlist);
 
@@ -436,16 +436,6 @@ APawn* SpawnDefaultPawnFor(AFortGameModeAthena* thisPtr, AFortPlayerControllerAt
 
 	auto PlayerState = (AFortPlayerStateAthena*)NewPlayer->PlayerState;
 
-	FGameMemberInfo Info{};
-	Info.MemberUniqueId = PlayerState->UniqueId;
-	Info.SquadId = PlayerState->SquadId;
-	Info.TeamIndex = PlayerState->TeamIndex;
-	Info.ReplicationID = -1;
-	Info.MostRecentArrayReplicationKey = -1;
-	Info.ReplicationKey = -1;
-	GameState->GameMemberInfoArray.Members.Add(Info);
-	GameState->GameMemberInfoArray.MarkArrayDirty();
-
 	NewPlayer->GetQuestManager(ESubGame::Athena)->InitializeQuestAbilities(NewPawn);
 
 	return NewPawn;
@@ -527,10 +517,23 @@ void ServerAcknowledgePossession(AFortPlayerControllerAthena* thisPtr, AFortPlay
 		return;
 
 	AFortGameModeAthena* GameMode = (AFortGameModeAthena*)UWorld::GetWorld()->AuthorityGameMode;
+	AFortGameStateAthena* GameState = Util::Cast<AFortGameStateAthena>(UWorld::GetWorld()->GameState);
 	if (thisPtr->CosmeticLoadoutPC.Character) {
 		PlayerState->HeroType = thisPtr->CosmeticLoadoutPC.Character ? thisPtr->CosmeticLoadoutPC.Character->HeroDefinition : nullptr;
 		UFortKismetLibrary::UpdatePlayerCustomCharacterPartsVisualization(PlayerState);
 	}
+
+	FGameMemberInfo Info{};
+	Info.MemberUniqueId = PlayerState->UniqueId;
+	Info.SquadId = PlayerState->SquadId;
+	Info.TeamIndex = PlayerState->TeamIndex;
+	Info.ReplicationID = -1;
+	Info.MostRecentArrayReplicationKey = -1;
+	Info.ReplicationKey = -1;
+	GameState->GameMemberInfoArray.Members.Add(Info);
+	GameState->GameMemberInfoArray.MarkArrayDirty();
+
+
 }
 
 void ServerLoadingScreenDropped(AFortPlayerControllerAthena* thisPtr) 
@@ -669,7 +672,7 @@ void ClientOnPawnDiedHook(AFortPlayerControllerAthena* PC, FFortPlayerDeathRepor
 	UFortWeaponItemDefinition* Item = DeathReport.KillerWeapon;
 
 	if (!DeadPlayerState)
-		return ClientOnPawnDiedOG(PC, DeathReport); 
+		return ClientOnPawnDiedOG(PC, DeathReport);
 
 	DeadPlayerState->DeathInfo.bDBNO = DeadPawn->WasDBNOOnDeath();
 	DeadPlayerState->DeathInfo.bInitialized = true;
@@ -682,40 +685,44 @@ void ClientOnPawnDiedHook(AFortPlayerControllerAthena* PC, FFortPlayerDeathRepor
 	DeadPlayerState->OnRep_DeathInfo();
 	//add mutator stuff
 
-	bool AllDied = true;
-	for (auto Member : DeadPlayerState->PlayerTeam->TeamMembers) {
-		if (Member != PC && ((AFortPlayerControllerAthena*)Member)->bMarkedAlive)
-		{
-			AllDied = false;
-			break;
+	if (Misc::GetCurrentPlaylist()->RespawnType == EAthenaRespawnType::None) {
+		bool AllDied = true;
+		for (auto Member : DeadPlayerState->PlayerTeam->TeamMembers) {
+			if (Member != PC && ((AFortPlayerControllerAthena*)Member)->bMarkedAlive)
+			{
+				AllDied = false;
+				break;
+			}
+		}
+
+		if (AllDied) {
+			for (AController* CurrentMember : DeadPlayerState->PlayerTeam->TeamMembers) {
+				AFortPlayerControllerAthena* CurrentMemberPC = Util::Cast<AFortPlayerControllerAthena>(CurrentMember);
+				if (!CurrentMemberPC) continue;
+
+				AFortPlayerStateAthena* CurrentMemberPlayerState = Util::Cast<AFortPlayerStateAthena>(CurrentMemberPC->PlayerState);
+				if (!CurrentMemberPlayerState) continue;
+
+				CurrentMemberPlayerState->Place = GameState->PlayersLeft;
+				CurrentMemberPlayerState->OnRep_Place();
+				FAthenaRewardResult Result{};
+				Result.TotalSeasonXpGained = CurrentMemberPC->XPComponent->TotalXpEarned;
+				Result.TotalBookXpGained = CurrentMemberPC->XPComponent->TotalXpEarned;
+				FAthenaMatchStats Stats{};
+				FAthenaMatchTeamStats TeamStats{};
+				TeamStats.Place = DeadPlayerState->Place;
+				TeamStats.TotalPlayers = GameState->TotalPlayers;
+				Stats.bIsValid = true;
+				CurrentMemberPC->ClientSendEndBattleRoyaleMatchForPlayer(true, Result);
+				CurrentMemberPC->ClientSendMatchStatsForPlayer(Stats);
+				CurrentMemberPC->ClientSendTeamStatsForPlayer(TeamStats);
+			}
 		}
 	}
 
-	if (AllDied) {
-		for (AController* CurrentMember : DeadPlayerState->PlayerTeam->TeamMembers) {
-			AFortPlayerControllerAthena* CurrentMemberPC = Util::Cast<AFortPlayerControllerAthena>(CurrentMember);
-			if (!CurrentMemberPC) continue;
+	
 
-			AFortPlayerStateAthena* CurrentMemberPlayerState = Util::Cast<AFortPlayerStateAthena>(CurrentMemberPC->PlayerState);
-			if (!CurrentMemberPlayerState) continue;
-
-			CurrentMemberPlayerState->Place = GameState->PlayersLeft;
-			CurrentMemberPlayerState->OnRep_Place();
-			FAthenaRewardResult Result{};
-			Result.TotalSeasonXpGained = CurrentMemberPC->XPComponent->TotalXpEarned;
-			Result.TotalBookXpGained = CurrentMemberPC->XPComponent->TotalXpEarned;
-			FAthenaMatchStats Stats{};
-			FAthenaMatchTeamStats TeamStats{};
-			TeamStats.Place = DeadPlayerState->Place;
-			TeamStats.TotalPlayers = GameState->TotalPlayers;
-			Stats.bIsValid = true;
-			CurrentMemberPC->ClientSendEndBattleRoyaleMatchForPlayer(true, Result);
-			CurrentMemberPC->ClientSendMatchStatsForPlayer(Stats);
-			CurrentMemberPC->ClientSendTeamStatsForPlayer(TeamStats);
-		}
-	}
-
-	if (KillerPlayerState && DeadPlayerState) {
+	if (KillerPlayerState && DeadPlayerState && DeadPlayerState == KillerPlayerState) {
 		PC->ClientReceiveKillNotification(KillerPlayerState, DeadPlayerState);
 		KillerPlayerState->ClientReportKill(DeadPlayerState);
 		KillerPlayerState->KillScore++;
@@ -732,8 +739,11 @@ void ClientOnPawnDiedHook(AFortPlayerControllerAthena* PC, FFortPlayerDeathRepor
 		//KillerPlayerState->ClientReportTournamentStatUpdate
 	}
 	//DeadPlayerState->PawnDeathLocation = DeathLocation;
-	RemoveFromAlivePlayers(GameMode, PC, DeadPlayerState, KillerPawn, Item, DeadPlayerState->DeathInfo.DeathCause, 0);
-	PC->bMarkedAlive = false;
+	if (Misc::GetCurrentPlaylist()->RespawnType == EAthenaRespawnType::None) {
+		RemoveFromAlivePlayers(GameMode, PC, DeadPlayerState, KillerPawn, Item, DeadPlayerState->DeathInfo.DeathCause, 0);
+		PC->bMarkedAlive = false;
+	}
+
 	ClientOnPawnDiedOG(PC, DeathReport);
 	if (KillerPawn && KillerPlayerState && Item) {
 		
@@ -793,40 +803,18 @@ void ServerTryActivateAbilityWithEventData(UAbilitySystemComponent* thisPtr, FGa
 void execOnGamePhaseStepChanged(AFortAthenaMutator_GiveItemsAtGamePhaseStep* thisPtr, FFrame* Stack) 
 {
 	TScriptInterface<IFortSafeZoneInterface> z_Param_Out_SafeZoneInterfaceTemp;
-	TScriptInterface<IFortSafeZoneInterface>* p_Z_Param_Out_SafeZoneInterfaceTemp;
 	EAthenaGamePhaseStep Z_Param_GamePhaseStep;
 
-	if (Stack->Code())
-		Stack->Step(Stack->Object(), &z_Param_Out_SafeZoneInterfaceTemp);
-	else
-	{
-		FProperty* PropertyChainForCompiledIn = Stack->PropertyChainForCompiledIn();
-		Stack->PropertyChainForCompiledIn() = (FProperty*)PropertyChainForCompiledIn->Next;
-		Stack->StepExplicitProperty((unsigned __int8*)&z_Param_Out_SafeZoneInterfaceTemp, PropertyChainForCompiledIn);
-	}
-
-	unsigned __int8* MostRecentPropertyAddress = Stack->MostRecentPropertyAddress();
-
-	p_Z_Param_Out_SafeZoneInterfaceTemp = &z_Param_Out_SafeZoneInterfaceTemp;
-	Z_Param_GamePhaseStep = EAthenaGamePhaseStep::None;
-
-	if (MostRecentPropertyAddress)
-		p_Z_Param_Out_SafeZoneInterfaceTemp = (TScriptInterface<IFortSafeZoneInterface>*)MostRecentPropertyAddress;
-
-	if (Stack->Code())
-		Stack->Step(Stack->Object(), &Z_Param_GamePhaseStep);
-	else
-	{
-		FProperty* PropertyChainForCompiledIn = Stack->PropertyChainForCompiledIn();
-		Stack->PropertyChainForCompiledIn() = (FProperty*)PropertyChainForCompiledIn->Next;
-		Stack->StepExplicitProperty((unsigned __int8*)&Z_Param_GamePhaseStep, PropertyChainForCompiledIn);
-	}
+	Stack->StepCompiledIn(&z_Param_Out_SafeZoneInterfaceTemp);
+	Stack->StepCompiledIn(&Z_Param_GamePhaseStep);
 
 	unsigned __int8* Code = Stack->Code();
-	Stack->Code() = &Code[Code != 0];
+	if (Code) {
+		Stack->Code() = &Code[Code != 0];
+	}
 
-	FLIPPED_LOG("GamePhaseStep: ")
-	FLIPPED_LOG((BYTE*)Z_Param_GamePhaseStep);
+
+	UE_LOG(LogFlipped, Log, "OnGamePhaseStepChanged called with SafeZoneInterface: %s, GamePhaseStep: %d", z_Param_Out_SafeZoneInterfaceTemp.GetObjectRef()->GetName().c_str(), (int)Z_Param_GamePhaseStep);
 
 }
 
@@ -1687,4 +1675,35 @@ void RemoveInventoryItem(IFortInventoryOwnerInterface* thisPtr, FGuid Guid, int 
 	}
 
 	Inventory::RemoveItem(PlayerController, Guid, a3);
+}
+
+void (*OnDamageServerOG)(ABuildingActor*, float, const struct FGameplayTagContainer&, const struct FVector&, const struct FHitResult&, class AController*, class AActor*, const struct FGameplayEffectContextHandle&);
+void OnDamageServer(ABuildingSMActor* Actor, float Damage, const struct FGameplayTagContainer& DamageTags, const struct FVector& Momentum, const struct FHitResult& HitInfo, class AController* InstigatedBy, class AActor* DamageCauser, const struct FGameplayEffectContextHandle& EffectContext) {
+	UE_LOG(LogFlipped, Log, "OnDamageServer called with Damage: %f, InstigatedBy: %s, DamageCauser: %s", 
+		Damage, 
+		InstigatedBy ? InstigatedBy->GetName().c_str() : "None",
+		DamageCauser ? DamageCauser->GetName().c_str() : "None");
+	OnDamageServerOG(Actor, Damage, DamageTags, Momentum, HitInfo, InstigatedBy, DamageCauser, EffectContext);
+
+	if (!Actor || !InstigatedBy || !InstigatedBy->PlayerState || !InstigatedBy->Pawn || !DamageCauser) return;
+
+	if (Actor->IsA(ABuildingSMActor::StaticClass()) 
+		&& DamageCauser->IsA(AB_Athena_Pickaxe_Generic_C::StaticClass()) && InstigatedBy->IsA(AAthena_PlayerController_C::StaticClass()) && !Actor->bPlayerPlaced) {
+		auto PC = (AFortPlayerControllerAthena*)InstigatedBy;
+		if (PC->MyFortPawn && PC->MyFortPawn->CurrentWeapon) {
+			float DataTableRowValue = 0.0f;
+			UDataTableFunctionLibrary::EvaluateCurveTableRow(Actor->BuildingResourceAmountOverride.CurveTable, Actor->BuildingResourceAmountOverride.RowName, 0, nullptr, &DataTableRowValue, {});
+			float ResourceAmount = round(DataTableRowValue / (Actor->GetMaxHealth() / Damage));
+			PC->ClientReportDamagedResourceBuilding(Actor, Actor->ResourceType, ResourceAmount, false, Damage == 100.0f);
+			Inventory::AddItem(PC, UFortKismetLibrary::K2_GetResourceItemDefinition(Actor->ResourceType), ResourceAmount);
+		}
+	}
+}
+
+void ServerClientIsReadyToRespawn(AFortPlayerControllerAthena* Controller) {
+	printf(__FUNCTION__"\n");
+	if (Controller) {
+		auto GameMode = UWorld::GetWorld()->AuthorityGameMode;
+		GameMode->RestartPlayer(Controller);
+	}
 }

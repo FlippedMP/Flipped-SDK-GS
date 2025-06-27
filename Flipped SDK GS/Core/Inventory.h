@@ -18,11 +18,8 @@ namespace Inventory
 {
 	void UpdateInventory(AFortPlayerControllerAthena* Controller, FFortItemEntry* ItemEntry = nullptr)
 	{
-
-
 		Controller->WorldInventory->bRequiresLocalUpdate = true;
 		Controller->WorldInventory->HandleInventoryLocalUpdate();
-		Controller->HandleWorldInventoryLocalUpdate();
 
 		if (ItemEntry)
 			Controller->WorldInventory->Inventory.MarkItemDirty(*ItemEntry);
