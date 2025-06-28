@@ -159,32 +159,35 @@ bool ReadyToStartMatch(AFortGameModeAthena* thisPtr)
 		{
 			SetPlaylist(thisPtr, Playlist);
 
+			//Playlist->RespawnType = EAthenaRespawnType::InfiniteRespawn;
+
 			thisPtr->AISettings = Playlist->AISettings;
 			if (thisPtr->AISettings)
 				thisPtr->AISettings->AIServices[1] = UAthenaAIServicePlayerBots::StaticClass();
 
-			for (int i = 0; i < Playlist->AdditionalLevels.Num(); i++)
-			{
-				TSoftObjectPtr<UWorld> World = Playlist->AdditionalLevels[i];
-				FString LevelName = UKismetStringLibrary::Conv_NameToString(World.ObjectID.AssetPathName);
-				ULevelStreamingDynamic::LoadLevelInstance(GetWorld(), LevelName, {}, {}, nullptr, FString(), {});
-				FAdditionalLevelStreamed NewLevel{ World.ObjectID.AssetPathName,false };
-				GameState->AdditionalPlaylistLevelsStreamed.Add(NewLevel);
+			if (!bUsesGameSessions) {
+				for (int i = 0; i < Playlist->AdditionalLevels.Num(); i++)
+				{
+					TSoftObjectPtr<UWorld> World = Playlist->AdditionalLevels[i];
+					FString LevelName = UKismetStringLibrary::Conv_NameToString(World.ObjectID.AssetPathName);
+					ULevelStreamingDynamic::LoadLevelInstance(GetWorld(), LevelName, {}, {}, nullptr, FString(), {});
+					FAdditionalLevelStreamed NewLevel{ World.ObjectID.AssetPathName,false };
+					GameState->AdditionalPlaylistLevelsStreamed.Add(NewLevel);
+				}
+
+				for (const TSoftObjectPtr < UWorld>& CurrentAdditionalLevelServerOnly : Playlist->AdditionalLevelsServerOnly)
+				{
+					FString LevelName = UKismetStringLibrary::Conv_NameToString(CurrentAdditionalLevelServerOnly.ObjectID.AssetPathName);
+					ULevelStreamingDynamic::LoadLevelInstance(GetWorld(), LevelName, {}, {}, nullptr, FString(), {});
+
+					FAdditionalLevelStreamed NewLevel{
+						CurrentAdditionalLevelServerOnly.ObjectID.AssetPathName,
+						true
+					};
+
+					GameState->AdditionalPlaylistLevelsStreamed.Add(NewLevel);
+				}
 			}
-
-			for (const TSoftObjectPtr < UWorld>& CurrentAdditionalLevelServerOnly : Playlist->AdditionalLevelsServerOnly)
-			{
-				FString LevelName = UKismetStringLibrary::Conv_NameToString(CurrentAdditionalLevelServerOnly.ObjectID.AssetPathName);
-				ULevelStreamingDynamic::LoadLevelInstance(GetWorld(), LevelName, {}, {}, nullptr, FString(), {});
-
-				FAdditionalLevelStreamed NewLevel{
-					CurrentAdditionalLevelServerOnly.ObjectID.AssetPathName,
-					true
-				};
-
-				GameState->AdditionalPlaylistLevelsStreamed.Add(NewLevel);
-			}
-
 			GameState->OnFinishedShowingAdditionalPlaylistLevel();
 			GameState->OnRep_AdditionalPlaylistLevelsStreamed();
 			thisPtr->HandleAllPlaylistLevelsVisible();
@@ -192,7 +195,7 @@ bool ReadyToStartMatch(AFortGameModeAthena* thisPtr)
 			GameState->OnRep_CurrentPlaylistId();
 			thisPtr->PlaylistHotfixOriginalGCFrequency = Playlist->GarbageCollectionFrequency;
 
-			thisPtr->bAllowSpectateAfterDeath = true;
+			thisPtr->bAllowSpectateAfterDeath = Playlist->RespawnType == EAthenaRespawnType::None;
 
 			thisPtr->AIDirector = Misc::SpawnActor<AAthenaAIDirector>();
 			thisPtr->AIDirector->Activate();
@@ -720,8 +723,6 @@ void ClientOnPawnDiedHook(AFortPlayerControllerAthena* PC, FFortPlayerDeathRepor
 		}
 	}
 
-	
-
 	if (KillerPlayerState && DeadPlayerState && DeadPlayerState == KillerPlayerState) {
 		PC->ClientReceiveKillNotification(KillerPlayerState, DeadPlayerState);
 		KillerPlayerState->ClientReportKill(DeadPlayerState);
@@ -934,8 +935,10 @@ bool SpawnLoot(ABuildingContainer* Container) {
 		}
 	}
 
-	FVector Location = Container->K2_GetActorLocation();
-	Location.Z += 20;
+	FVector Location = Container->K2_GetActorLocation() + 
+		(Container->GetActorForwardVector() * Container->LootSpawnLocation_Athena.X) + 
+		(Container->GetActorRightVector() * Container->LootSpawnLocation_Athena.Y) + 
+		(Container->GetActorUpVector() * Container->LootSpawnLocation_Athena.Z);
 	for (const FFortItemEntry& Entry : Looting::PickLootDrops(LootTierGroupToUse)) {
 		FSpawnPickupData Data{};
 		Data.ItemDefinition = Entry.ItemDefinition;
@@ -1702,8 +1705,35 @@ void OnDamageServer(ABuildingSMActor* Actor, float Damage, const struct FGamepla
 
 void ServerClientIsReadyToRespawn(AFortPlayerControllerAthena* Controller) {
 	printf(__FUNCTION__"\n");
-	if (Controller) {
-		auto GameMode = UWorld::GetWorld()->AuthorityGameMode;
-		GameMode->RestartPlayer(Controller);
+	auto GameMode = (AFortGameModeAthena*)UWorld::GetWorld()->AuthorityGameMode;
+	auto GameState = (AFortGameStateAthena*)GameMode->GameState;
+	auto PlayerState = (AFortPlayerStateAthena*)Controller->PlayerState;
+
+	if (GameState->IsRespawningAllowed(PlayerState))
+	{
+		FFortRespawnData* RespawnData = &PlayerState->RespawnData;
+
+		FTransform Transform{};
+		Transform.Translation = RespawnData->RespawnLocation;
+		Transform.Rotation = UKismetMathLibrary::Conv_RotatorToQuaternion(RespawnData->RespawnRotation);
+		Transform.Scale3D = FVector(1, 1, 1);
+
+		AFortPlayerPawn* PlayerPawn = (AFortPlayerPawn*)GameMode->SpawnDefaultPawnAtTransform(Controller, Transform);
+
+		if (!PlayerPawn)
+			return;
+
+		PlayerPawn->SetOwner(Controller);
+
+		Controller->Possess(PlayerPawn);
+
+		PlayerPawn->SetMaxHealth(100);
+		PlayerPawn->SetHealth(100);
+		PlayerPawn->SetMaxShield(100);
+		PlayerPawn->SetShield(100);
+
+		Controller->RespawnPlayerAfterDeath(true);
+
+		RespawnData->bClientIsReady = true;
 	}
 }

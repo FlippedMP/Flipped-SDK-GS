@@ -172,6 +172,7 @@ DWORD WINAPI Main(LPVOID)
         UKismetSystemLibrary::ExecuteConsoleCommand(GetWorld(), L"log LogFortWorld", nullptr);
         UKismetSystemLibrary::ExecuteConsoleCommand(GetWorld(), L"log LogFortMutatorInventoryOverride all", nullptr);
         UKismetSystemLibrary::ExecuteConsoleCommand(GetWorld(), L"log LogFort Verbose", nullptr);
+        UKismetSystemLibrary::ExecuteConsoleCommand(GetWorld(), L"log LogFort Verbose", nullptr);
         UKismetSystemLibrary::ExecuteConsoleCommand(GetWorld(), L"log LogFortInvServiceComp all", nullptr);
         UKismetSystemLibrary::ExecuteConsoleCommand(GetWorld(), L"log LogFortPlayerRegistration all");
         UKismetSystemLibrary::ExecuteConsoleCommand(GetWorld(), L"log LogStreaming");

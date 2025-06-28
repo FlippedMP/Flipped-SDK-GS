@@ -60,7 +60,8 @@ namespace Addresses
 
 	const inline std::vector<uint64_t> NullFunctions =
 	{
-		0x258D0DC // ChangeGamesessionId
+		0x258D0DC, // ChangeGamesessionId
+		0x44A9B00
 	};
 }
 
