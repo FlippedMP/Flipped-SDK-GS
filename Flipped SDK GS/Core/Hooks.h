@@ -155,7 +155,7 @@ bool ReadyToStartMatch(AFortGameModeAthena* thisPtr)
 	if (thisPtr->CurrentPlaylistId == -1)
 	{
 		if (UFortPlaylistAthena* Playlist =
-			UObject::FindObject<UFortPlaylistAthena>(bCreative ? "FortPlaylistAthena Playlist_PlaygroundV2.Playlist_PlaygroundV2" : "FortPlaylistAthena Playlist_Playground.Playlist_Playground"))
+			UObject::FindObject<UFortPlaylistAthena>(bCreative ? "FortPlaylistAthena Playlist_PlaygroundV2.Playlist_PlaygroundV2" : "FortPlaylistAthena Playlist_Low_Solo.Playlist_Low_Solo"))
 		{
 			SetPlaylist(thisPtr, Playlist);
 
@@ -187,12 +187,13 @@ bool ReadyToStartMatch(AFortGameModeAthena* thisPtr)
 
 					GameState->AdditionalPlaylistLevelsStreamed.Add(NewLevel);
 				}
+				GameState->OnFinishedShowingAdditionalPlaylistLevel();
+				GameState->OnRep_AdditionalPlaylistLevelsStreamed();
+				thisPtr->HandleAllPlaylistLevelsVisible();
+				GameState->OnRep_CurrentPlaylistInfo();
+				GameState->OnRep_CurrentPlaylistId();
 			}
-			GameState->OnFinishedShowingAdditionalPlaylistLevel();
-			GameState->OnRep_AdditionalPlaylistLevelsStreamed();
-			thisPtr->HandleAllPlaylistLevelsVisible();
-			GameState->OnRep_CurrentPlaylistInfo();
-			GameState->OnRep_CurrentPlaylistId();
+
 			thisPtr->PlaylistHotfixOriginalGCFrequency = Playlist->GarbageCollectionFrequency;
 
 			thisPtr->bAllowSpectateAfterDeath = Playlist->RespawnType == EAthenaRespawnType::None;
@@ -262,42 +263,6 @@ bool ReadyToStartMatch(AFortGameModeAthena* thisPtr)
 						Util::Cast<UFortGameInstance>(UWorld::GetWorld()->OwningGameInstance)->InventoryManager);
 			} /*So Improper*/
 
-			if (bLategame) {
-				LoadLateGameLoadouts();
-			}
-			else {
-				TArray<AActor*> WarmupActors;
-				static UClass* WarmupClass = Native::StaticLoadObject<UClass>("/Game/Athena/Environments/Blueprints/Tiered_Athena_FloorLoot_Warmup.Tiered_Athena_FloorLoot_Warmup_C");
-				UGameplayStatics::GetAllActorsOfClass(GetWorld(), WarmupClass, &WarmupActors);
-
-				for (auto& WarmupActor : WarmupActors)
-				{
-					auto Container = (ABuildingContainer*)WarmupActor;
-
-					Container->BP_SpawnLoot(nullptr);
-
-					Container->K2_DestroyActor();
-				}
-				WarmupActors.Free();
-
-				WarmupClass = Native::StaticLoadObject<UClass>("/Game/Athena/Environments/Blueprints/Tiered_Athena_FloorLoot_01.Tiered_Athena_FloorLoot_01_C");
-				UGameplayStatics::GetAllActorsOfClass(UWorld::GetWorld(), WarmupClass, &WarmupActors);
-
-				for (auto& WarmupActor : WarmupActors)
-				{
-					auto Container = (ABuildingContainer*)WarmupActor;
-
-					Container->BP_SpawnLoot(nullptr);
-
-					Container->K2_DestroyActor();
-				}
-				WarmupActors.Free();
-			}
-
-			static UDataTable* AthenaRangedWeapons = Native::StaticLoadObject<UDataTable>("/Game/Athena/Items/Weapons/AthenaRangedWeapons.AthenaRangedWeapons");
-			Misc::ApplyDataTablePatch(AthenaRangedWeapons);
-
-
 			float TimeSeconds = UGameplayStatics::GetTimeSeconds(GetWorld());
 			float Duration = 120.f;
 
@@ -330,8 +295,35 @@ bool ReadyToStartMatch(AFortGameModeAthena* thisPtr)
 			if (!Playlist)
 			{
 				FLIPPED_LOG("Playlist not found");
+				return false;
 			}
 			SetPlaylist(thisPtr, Playlist);
+			for (int i = 0; i < Playlist->AdditionalLevels.Num(); i++)
+			{
+				TSoftObjectPtr<UWorld> World = Playlist->AdditionalLevels[i];
+				FString LevelName = UKismetStringLibrary::Conv_NameToString(World.ObjectID.AssetPathName);
+				ULevelStreamingDynamic::LoadLevelInstance(GetWorld(), LevelName, {}, {}, nullptr, FString(), {});
+				FAdditionalLevelStreamed NewLevel{ World.ObjectID.AssetPathName,false };
+				GameState->AdditionalPlaylistLevelsStreamed.Add(NewLevel);
+			}
+
+			for (const TSoftObjectPtr < UWorld>& CurrentAdditionalLevelServerOnly : Playlist->AdditionalLevelsServerOnly)
+			{
+				FString LevelName = UKismetStringLibrary::Conv_NameToString(CurrentAdditionalLevelServerOnly.ObjectID.AssetPathName);
+				ULevelStreamingDynamic::LoadLevelInstance(GetWorld(), LevelName, {}, {}, nullptr, FString(), {});
+
+				FAdditionalLevelStreamed NewLevel{
+					CurrentAdditionalLevelServerOnly.ObjectID.AssetPathName,
+					true
+				};
+
+				GameState->AdditionalPlaylistLevelsStreamed.Add(NewLevel);
+			}
+			GameState->OnFinishedShowingAdditionalPlaylistLevel();
+			GameState->OnRep_AdditionalPlaylistLevelsStreamed();
+			thisPtr->HandleAllPlaylistLevelsVisible();
+			GameState->OnRep_CurrentPlaylistInfo();
+			GameState->OnRep_CurrentPlaylistId();
 			bWaitedForPlaylist = true;
 		}
 	}
@@ -360,6 +352,42 @@ bool ReadyToStartMatch(AFortGameModeAthena* thisPtr)
 		if (!bLoadedProperly)
 			return false;
 
+		printf("Playlist: %s\n", GameState->CurrentPlaylistInfo.BasePlaylist->GetName().c_str());
+
+		if (bLategame) {
+			LoadLateGameLoadouts();
+		}
+		else {
+			TArray<AActor*> WarmupActors;
+			static UClass* WarmupClass = Native::StaticLoadObject<UClass>("/Game/Athena/Environments/Blueprints/Tiered_Athena_FloorLoot_Warmup.Tiered_Athena_FloorLoot_Warmup_C");
+			UGameplayStatics::GetAllActorsOfClass(GetWorld(), WarmupClass, &WarmupActors);
+
+			for (auto& WarmupActor : WarmupActors)
+			{
+				auto Container = (ABuildingContainer*)WarmupActor;
+
+				Container->BP_SpawnLoot(nullptr);
+
+				Container->K2_DestroyActor();
+			}
+			WarmupActors.Free();
+
+			WarmupClass = Native::StaticLoadObject<UClass>("/Game/Athena/Environments/Blueprints/Tiered_Athena_FloorLoot_01.Tiered_Athena_FloorLoot_01_C");
+			UGameplayStatics::GetAllActorsOfClass(UWorld::GetWorld(), WarmupClass, &WarmupActors);
+
+			for (auto& WarmupActor : WarmupActors)
+			{
+				auto Container = (ABuildingContainer*)WarmupActor;
+
+				Container->BP_SpawnLoot(nullptr);
+
+				Container->K2_DestroyActor();
+			}
+			WarmupActors.Free();
+		}
+
+		static UDataTable* AthenaRangedWeapons = Native::StaticLoadObject<UDataTable>("/Game/Athena/Items/Weapons/AthenaRangedWeapons.AthenaRangedWeapons");
+		Misc::ApplyDataTablePatch(AthenaRangedWeapons);
 	}
 
 	
@@ -397,6 +425,10 @@ APawn* SpawnDefaultPawnFor(AFortGameModeAthena* thisPtr, AFortPlayerControllerAt
 			Inventory::AddItem(NewPlayer, CosmeticLoadoutPC->Pickaxe->WeaponDefinition, 1);
 		else
 			FLIPPED_LOG("Failed to get pickaxe!");
+	}
+
+	if (GameState->GamePhase >= EAthenaGamePhase::Aircraft) {
+		Inventory::RemoveAllDroppableItems(NewPlayer);
 	}
 
 	static bool bFirst = false;
@@ -525,18 +557,7 @@ void ServerAcknowledgePossession(AFortPlayerControllerAthena* thisPtr, AFortPlay
 		PlayerState->HeroType = thisPtr->CosmeticLoadoutPC.Character ? thisPtr->CosmeticLoadoutPC.Character->HeroDefinition : nullptr;
 		UFortKismetLibrary::UpdatePlayerCustomCharacterPartsVisualization(PlayerState);
 	}
-
-	FGameMemberInfo Info{};
-	Info.MemberUniqueId = PlayerState->UniqueId;
-	Info.SquadId = PlayerState->SquadId;
-	Info.TeamIndex = PlayerState->TeamIndex;
-	Info.ReplicationID = -1;
-	Info.MostRecentArrayReplicationKey = -1;
-	Info.ReplicationKey = -1;
-	GameState->GameMemberInfoArray.Members.Add(Info);
-	GameState->GameMemberInfoArray.MarkArrayDirty();
-
-
+	Misc::ApplyModifiersToPlayer(thisPtr);
 }
 
 void ServerLoadingScreenDropped(AFortPlayerControllerAthena* thisPtr) 
@@ -618,6 +639,18 @@ void ServerLoadingScreenDropped(AFortPlayerControllerAthena* thisPtr)
 		printf("Item: %s\n", PhoneItemDef->GetFullName().c_str());
 		Inventory::AddItem(thisPtr, PhoneItemDef);
 	}
+
+	FGameMemberInfo Info{};
+	Info.MemberUniqueId = PlayerState->UniqueId;
+	Info.SquadId = PlayerState->SquadId;
+	Info.TeamIndex = PlayerState->TeamIndex;
+	Info.ReplicationID = -1;
+	Info.MostRecentArrayReplicationKey = -1;
+	Info.ReplicationKey = -1;
+	GameState->GameMemberInfoArray.Members.Add(Info);
+	GameState->GameMemberInfoArray.MarkArrayDirty();
+
+
 }
 
 void ServerExecuteInventoryItem(AFortPlayerControllerAthena* thisPtr, const FGuid& ItemGUID)
@@ -935,11 +968,16 @@ bool SpawnLoot(ABuildingContainer* Container) {
 		}
 	}
 
+	//printf("LootTierGroupToUse: %s", LootTierGroupToUse.ToString().c_str());
+
 	FVector Location = Container->K2_GetActorLocation() + 
 		(Container->GetActorForwardVector() * Container->LootSpawnLocation_Athena.X) + 
 		(Container->GetActorRightVector() * Container->LootSpawnLocation_Athena.Y) + 
 		(Container->GetActorUpVector() * Container->LootSpawnLocation_Athena.Z);
-	for (const FFortItemEntry& Entry : Looting::PickLootDrops(LootTierGroupToUse)) {
+
+	std::string LootTierGroupStr = LootTierGroupToUse.ToString();
+
+	for (const FFortItemEntry& Entry : Looting::PickLootDrops(LootTierGroupStr, !LootTierGroupToUse.ToString().contains("Loot_AthenaFloorLoot"))) {
 		FSpawnPickupData Data{};
 		Data.ItemDefinition = Entry.ItemDefinition;
 		Data.Count = Entry.Count;

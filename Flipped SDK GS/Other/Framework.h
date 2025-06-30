@@ -370,6 +370,45 @@ namespace Misc
 	{
 		return Util::Cast<AFortGameStateAthena>(GetWorld()->GameState)->CurrentPlaylistInfo.BasePlaylist;
 	}
+
+	void ApplyModifiersToPlayer(AFortPlayerControllerAthena* PC) {
+		if (!PC) return;
+		auto PlayerState = (AFortPlayerStateAthena*)PC->PlayerState;
+		void* InterfaceAddress = Native::GetInterfaceAddress(PlayerState, IAbilitySystemInterface::StaticClass());
+
+		if (!InterfaceAddress)
+			return;
+
+		if (!PlayerState->AbilitySystemComponent) return;
+
+		TScriptInterface<IAbilitySystemInterface> Script;
+		Script.ObjectPointer = PlayerState;
+		Script.InterfacePointer = InterfaceAddress;
+		auto Playlist = GetCurrentPlaylist();
+		if (!Playlist) return;
+		for (const auto& Modifier : Playlist->ModifierList) {
+			if (Modifier.IsValid()) {
+				UFortGameplayModifierItemDefinition* ModDef = Modifier.NewGet();
+				if (ModDef) {
+					for (const auto& PersGameplayEffect : ModDef->PersistentGameplayEffects) {
+						if (!PersGameplayEffect.DeliveryRequirements.bApplyToPlayerPawns) continue;
+						if (PersGameplayEffect.DeliveryRequirements.bConsiderTeam) continue;
+						for (const auto& GameplayEffect : PersGameplayEffect.GameplayEffects) {
+							FGameplayEffectContextHandle EffectContext{};
+							UClass* GameplayEffectClass = GameplayEffect.GameplayEffect.NewGet();
+							if (!GameplayEffectClass) continue;
+							PlayerState->AbilitySystemComponent->BP_ApplyGameplayEffectToSelf(GameplayEffectClass, GameplayEffect.Level, EffectContext);
+						}
+					}
+					for (const auto& PersAbilitySet : ModDef->PersistentAbilitySets) {
+						for (const auto& AbilitySet : PersAbilitySet.AbilitySets) {
+							UFortKismetLibrary::EquipFortAbilitySet(Script, AbilitySet.NewGet(), nullptr);
+						}
+					}
+				}
+			}
+		}
+	}
 }
 
 class FFrame

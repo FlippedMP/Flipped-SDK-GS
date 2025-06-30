@@ -66,10 +66,10 @@ namespace Looting
         return nullptr;
     }
 
-    static inline TArray<FFortLootTierData*> TierDataAllGroups;
-    static inline TArray<FFortLootPackageData*> LPGroupsAll;
+    inline TArray<FFortLootTierData*> TierDataAllGroups;
+    inline TArray<FFortLootPackageData*> LPGroupsAll;
 
-    void SetupLDSForPackage(TArray<FFortItemEntry>& LootDrops, SDK::FName Package, int i, FName TierGroup, int WorldLevel = ((AFortGameStateAthena*)UWorld::GetWorld()->GameState)->WorldLevel) {
+    void SetupLDSForPackage(TArray<FFortItemEntry>& LootDrops, SDK::FName Package, int i, std::string& TierGroup, int WorldLevel = ((AFortGameStateAthena*)UWorld::GetWorld()->GameState)->WorldLevel) {
         TArray<FFortLootPackageData*> LPGroups;
         for (auto const& Val : LPGroupsAll)
         {
@@ -127,13 +127,20 @@ namespace Looting
         }
     }
 
-    void SetupLootGroups(AFortGameStateAthena* GameState)
+    void SetupLootGroups(AFortGameStateAthena* GameState, bool bTierDataGroups)
     {
         if (!GameState) return;
 
-        if (LPGroupsAll.Num() > 0 && TierDataAllGroups.Num() > 0) {
-            return;
+        if (bTierDataGroups) {
+            LPGroupsAll.Free();
+            TierDataAllGroups.Free();
         }
+        else {
+            if (LPGroupsAll.Num() > 0 && TierDataAllGroups.Num() > 0)
+                return;
+        }
+
+
 
         static UDataTable* LootPackages = nullptr;
         static UDataTable* LootTierData = nullptr;
@@ -154,24 +161,8 @@ namespace Looting
             for (auto& [Key, Val] : (TMap<FName, FFortLootPackageData*>)LootPackages->RowMap) {
                 LPGroupsAll.Add(Val);
             }
-            UCompositeDataTable* CompTable = Util::Cast<UCompositeDataTable>(LootPackages);
-            if (CompTable) {
-                for (auto& PT : CompTable->ParentTables) {
-                    for (auto& [Key, Val] : (TMap<FName, FFortLootPackageData*>) PT->RowMap) {
-                        LPGroupsAll.Add(Val);
-                    }
-                }
-            }
         }
         if (LootTierData) {
-            if (auto CompositeTable = Util::Cast<UCompositeDataTable>(LootTierData)) {
-                for (auto& ParentTable : CompositeTable->ParentTables) {
-                    for (auto& [Key, Val] : (TMap<FName, FFortLootTierData*>) ParentTable->RowMap) {
-                        if (!Val) continue;
-                        TierDataAllGroups.Add(Val);
-                    }
-                }
-            }
             for (auto& [Key, Val] : (TMap<FName, FFortLootTierData*>) LootTierData->RowMap) {
                 if (!Val) continue;
                 TierDataAllGroups.Add(Val);
@@ -180,30 +171,35 @@ namespace Looting
 
         auto GameFeatureDataArray = Misc::GetObjectsOfClass<UFortGameFeatureData>();
         for (const auto& GameFeatureData : GameFeatureDataArray) {
+            bool bAppliedPlaylistData = false;
             auto LootTableData = GameFeatureData->DefaultLootTableData;
+            for (int i = 0; i < Misc::GetCurrentPlaylist()->GameplayTagContainer.GameplayTags.Num(); i++) {
+				auto& Tag = Misc::GetCurrentPlaylist()->GameplayTagContainer.GameplayTags[i];
+
+                for (auto& [CurrentOverideTag, Val] : GameFeatureData->PlaylistOverrideLootTableData)
+                {
+                    if (Tag == CurrentOverideTag) {
+                        UDataTable* PlaylistLootPackages = Val.LootPackageData.NewGet();
+						UDataTable* PLaylistLootTierData = Val.LootTierData.NewGet();
+                        if (PlaylistLootPackages && PLaylistLootTierData) {
+                            for (auto& [Key, Val] : (TMap<FName, FFortLootPackageData*>)PlaylistLootPackages->RowMap) {
+                                LPGroupsAll.Add(Val);
+                            }
+                            for (auto& [Key, Val] : (TMap<FName, FFortLootTierData*>) PLaylistLootTierData->RowMap) {
+                                if (!Val) continue;
+                                TierDataAllGroups.Add(Val);
+							}
+                        }
+                    }
+                }
+            }
             if (auto LootPackageData = LootTableData.LootPackageData.NewGet())
             {
                 for (auto& [Key, Val] : (TMap<FName, FFortLootPackageData*>)LootPackageData->RowMap) {
                     LPGroupsAll.Add(Val);
                 }
-                UCompositeDataTable* CompTable = Util::Cast<UCompositeDataTable>(LootPackageData);
-                if (CompTable) {
-                    for (auto& PT : CompTable->ParentTables) {
-                        for (auto& [Key, Val] : (TMap<FName, FFortLootPackageData*>) PT->RowMap) {
-                            LPGroupsAll.Add(Val);
-                        }
-                    }
-                }
             }
             if (auto LootTierDataTable = LootTableData.LootTierData.NewGet()) {
-                if (auto CompositeTable = Util::Cast<UCompositeDataTable>(LootTierDataTable)) {
-                    for (auto& ParentTable : CompositeTable->ParentTables) {
-                        for (auto& [Key, Val] : (TMap<FName, FFortLootTierData*>) ParentTable->RowMap) {
-                            if (!Val) continue;
-                            TierDataAllGroups.Add(Val);
-                        }
-                    }
-                }
                 for (auto& [Key, Val] : (TMap<FName, FFortLootTierData*>) LootTierDataTable->RowMap) {
                     if (!Val) continue;
                     TierDataAllGroups.Add(Val);
@@ -212,15 +208,27 @@ namespace Looting
         }
     }
 
-    TArray<FFortItemEntry> PickLootDrops(FName TierGroup, int LootTier = -1, int WorldLevel = ((AFortGameStateAthena*)UWorld::GetWorld()->GameState)->WorldLevel) {
+    TArray<FFortItemEntry> PickLootDrops(std::string& TierGroupName, bool bSetupTables = false, int LootTier = -1, int WorldLevel = ((AFortGameStateAthena*)UWorld::GetWorld()->GameState)->WorldLevel) {
         
-        SetupLootGroups(((AFortGameStateAthena*)UWorld::GetWorld()->GameState));
+        SetupLootGroups(((AFortGameStateAthena*)UWorld::GetWorld()->GameState), bSetupTables);
+
+        if (TierDataAllGroups.Num() == 0 || LPGroupsAll.Num() == 0) {
+            std::cout << "No Loot Groups or Tier Data found!" << std::endl;
+            return {};
+		}
+
         
         TArray<FFortLootTierData*> TierDataGroups;
         for (auto const& Val : TierDataAllGroups) {
-            if (Val->TierGroup == TierGroup && (LootTier == -1 ? true : LootTier == Val->LootTier))
+            if (!Val) continue;
+            std::string ValTierGroup = Val->TierGroup.IsValid()? Val->TierGroup.ToString() : "";
+            if (ValTierGroup == TierGroupName && (LootTier == -1 ? true : LootTier == Val->LootTier))
                 TierDataGroups.Add(Val);
         }
+
+        if (TierDataGroups.Num() == 0)
+            return {};
+
         auto LootTierData = PickWeighted(TierDataGroups, [](float Total) { return ((float)rand() / 32767.f) * Total; });
         if (!LootTierData)
             return {};
@@ -268,7 +276,7 @@ namespace Looting
 
         for (int i = 0; i < AmountOfLootDrops && i < LootTierData->LootPackageCategoryMinArray.Num(); i++)
             for (int j = 0; j < LootTierData->LootPackageCategoryMinArray[i] && LootTierData->LootPackageCategoryMinArray[i] >= 1; j++)
-                SetupLDSForPackage(LootDrops, LootTierData->LootPackage, i, TierGroup, WorldLevel);
+                SetupLDSForPackage(LootDrops, LootTierData->LootPackage, i, TierGroupName, WorldLevel);
 
         std::map<UFortWorldItemDefinition*, int32> AmmoMap;
         for (auto& Item : LootDrops)

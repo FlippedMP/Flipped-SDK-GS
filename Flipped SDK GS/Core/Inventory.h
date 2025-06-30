@@ -408,4 +408,13 @@ namespace Inventory
 
 		return Entries;
 	}
+
+	std::vector<UFortItemDefinition*> GetAllItems(AFortPlayerControllerAthena* PC)
+	{
+		std::vector<UFortItemDefinition*> DiddyBlud;
+		for (const auto& Entry : PC->WorldInventory->Inventory.ReplicatedEntries) {
+			DiddyBlud.push_back(Entry.ItemDefinition);
+		}
+		return DiddyBlud;
+	}
 }
