@@ -87,10 +87,56 @@ namespace AI
 		OutList->Add(ItemAndCount);
 	}
 
+	void UpdateInventory(AFortAthenaAIBotController* Controller, FFortItemEntry* ItemEntry = nullptr)
+	{
+		Controller->Inventory->bRequiresLocalUpdate = true;
+		Controller->Inventory->HandleInventoryLocalUpdate();
+
+		if (ItemEntry)
+			Controller->Inventory->Inventory.MarkItemDirty(*ItemEntry);
+		else
+			Controller->Inventory->Inventory.MarkArrayDirty();
+	}
+
+	UFortWorldItem* AddItem(AFortAthenaAIBotController* Controller, UFortItemDefinition* Definition, int Count = 1) {
+		if (!Controller || !Controller->Inventory || !Definition)
+			return nullptr;
+
+		UE_LOG(LogFlipped, Log, "Adding %s to %s's Inventory", Definition->GetFullName().c_str(), Controller->GetFullName().c_str());
+
+		UFortWorldItem* Item = Util::Cast<UFortWorldItem>(Definition->CreateTemporaryItemInstanceBP(Count, 0));
+		Item->OwnerInventory = Controller->Inventory;
+
+		Item->ItemEntry.ItemDefinition = Definition;
+		Item->ItemEntry.Count = Count;
+		Item->ItemEntry.Level = 0;
+
+		Controller->Inventory->Inventory.ItemInstances.Add(Item);
+		Controller->Inventory->Inventory.ReplicatedEntries.Add(Item->ItemEntry);
+
+		UpdateInventory(Controller, &Item->ItemEntry);
+
+		if (auto Item2 = Util::Cast<UFortWeaponMeleeItemDefinition>(Definition)) {
+			Controller->EquipWeapon(Item);
+		}
+
+		return Item;
+	}
+
 	void (*PostOnSpawnedOG)(UFortAthenaAISpawnerDataComponent_InventoryBase*, AFortAIPawn*);
 	void PostOnSpawned(UFortAthenaAISpawnerDataComponent_InventoryBase* thisPtr, AFortAIPawn* PawnAI) {
 		AFortAthenaAIBotController* Controller = Util::Cast<AFortAthenaAIBotController>(PawnAI->Controller);
 		Controller->Inventory = Misc::SpawnActor<AFortInventory>({},{}, Controller);
+
+		TArray<FItemAndCount> StartingItems;
+		GetInventoryItems(thisPtr, &StartingItems);
+
+		for (const auto& StartingItem : StartingItems) {
+			AddItem(Controller, StartingItem.Item, StartingItem.Count);
+		}
+
+		
+
 		PostOnSpawnedOG(thisPtr, PawnAI);
 	}
 }

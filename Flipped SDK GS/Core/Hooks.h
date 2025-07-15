@@ -196,7 +196,7 @@ bool ReadyToStartMatch(AFortGameModeAthena* thisPtr)
 
 			thisPtr->PlaylistHotfixOriginalGCFrequency = Playlist->GarbageCollectionFrequency;
 
-			thisPtr->bAllowSpectateAfterDeath = Playlist->RespawnType == EAthenaRespawnType::None;
+			thisPtr->bAllowSpectateAfterDeath = true;
 
 			thisPtr->AIDirector = Misc::SpawnActor<AAthenaAIDirector>();
 			thisPtr->AIDirector->Activate();
@@ -262,16 +262,6 @@ bool ReadyToStartMatch(AFortGameModeAthena* thisPtr)
 					(UVkPersistenceManager*)UGameplayStatics::SpawnObject(UVkPersistenceManager::StaticClass(),
 						Util::Cast<UFortGameInstance>(UWorld::GetWorld()->OwningGameInstance)->InventoryManager);
 			} /*So Improper*/
-
-			float TimeSeconds = UGameplayStatics::GetTimeSeconds(GetWorld());
-			float Duration = 120.f;
-
-			GameState->WarmupCountdownEndTime = TimeSeconds + Duration;
-			thisPtr->WarmupCountdownDuration = Duration;
-			GameState->WarmupCountdownStartTime = TimeSeconds;
-			thisPtr->WarmupEarlyCountdownDuration = Duration;
-
-
 			SET_TITLE("Flipped 19.10 - Listening!");
 		}
 
@@ -721,42 +711,59 @@ void ClientOnPawnDiedHook(AFortPlayerControllerAthena* PC, FFortPlayerDeathRepor
 	DeadPlayerState->OnRep_DeathInfo();
 	//add mutator stuff
 
-	if (Misc::GetCurrentPlaylist()->RespawnType == EAthenaRespawnType::None) {
-		bool AllDied = true;
-		for (auto Member : DeadPlayerState->PlayerTeam->TeamMembers) {
-			if (Member != PC && ((AFortPlayerControllerAthena*)Member)->bMarkedAlive)
-			{
-				AllDied = false;
-				break;
-			}
-		}
-
-		if (AllDied) {
-			for (AController* CurrentMember : DeadPlayerState->PlayerTeam->TeamMembers) {
-				AFortPlayerControllerAthena* CurrentMemberPC = Util::Cast<AFortPlayerControllerAthena>(CurrentMember);
-				if (!CurrentMemberPC) continue;
-
-				AFortPlayerStateAthena* CurrentMemberPlayerState = Util::Cast<AFortPlayerStateAthena>(CurrentMemberPC->PlayerState);
-				if (!CurrentMemberPlayerState) continue;
-
-				CurrentMemberPlayerState->Place = GameState->PlayersLeft;
-				CurrentMemberPlayerState->OnRep_Place();
-				FAthenaRewardResult Result{};
-				Result.TotalSeasonXpGained = CurrentMemberPC->XPComponent->TotalXpEarned;
-				Result.TotalBookXpGained = CurrentMemberPC->XPComponent->TotalXpEarned;
-				FAthenaMatchStats Stats{};
-				FAthenaMatchTeamStats TeamStats{};
-				TeamStats.Place = DeadPlayerState->Place;
-				TeamStats.TotalPlayers = GameState->TotalPlayers;
-				Stats.bIsValid = true;
-				CurrentMemberPC->ClientSendEndBattleRoyaleMatchForPlayer(true, Result);
-				CurrentMemberPC->ClientSendMatchStatsForPlayer(Stats);
-				CurrentMemberPC->ClientSendTeamStatsForPlayer(TeamStats);
-			}
+	for (size_t i = 0; i < PC->WorldInventory->Inventory.ItemInstances.Num(); i++) {
+		if (PC->WorldInventory->Inventory.ItemInstances[i]->CanBeDropped()) {
+			FSpawnPickupData SpawnPickupData{};
+			SpawnPickupData.bRandomRotation = true;
+			SpawnPickupData.ItemDefinition = PC->WorldInventory->Inventory.ItemInstances[i]->ItemEntry.ItemDefinition;
+			SpawnPickupData.Count = PC->WorldInventory->Inventory.ItemInstances[i]->ItemEntry.Count;
+			SpawnPickupData.FortPickupSourceTypeFlag = EFortPickupSourceTypeFlag::Player;
+			SpawnPickupData.FortPickupSpawnSource = EFortPickupSpawnSource::PlayerElimination;
+			SpawnPickupData.Location = DeathLocation;
+			Inventory::SpawnPickup(SpawnPickupData);
+			PC->WorldInventory->Inventory.ItemInstances.Remove(i);
+			PC->WorldInventory->Inventory.ReplicatedEntries.Remove(i);
+			PC->WorldInventory->Inventory.MarkArrayDirty();
 		}
 	}
 
-	if (KillerPlayerState && DeadPlayerState && DeadPlayerState == KillerPlayerState) {
+	Inventory::UpdateInventory(PC);
+
+
+	bool AllDied = true;
+	for (auto Member : DeadPlayerState->PlayerTeam->TeamMembers) {
+		if (Member != PC && ((AFortPlayerControllerAthena*)Member)->bMarkedAlive)
+		{
+			AllDied = false;
+			break;
+		}
+	}
+
+	if (AllDied) {
+		for (AController* CurrentMember : DeadPlayerState->PlayerTeam->TeamMembers) {
+			AFortPlayerControllerAthena* CurrentMemberPC = Util::Cast<AFortPlayerControllerAthena>(CurrentMember);
+			if (!CurrentMemberPC) continue;
+
+			AFortPlayerStateAthena* CurrentMemberPlayerState = Util::Cast<AFortPlayerStateAthena>(CurrentMemberPC->PlayerState);
+			if (!CurrentMemberPlayerState) continue;
+
+			CurrentMemberPlayerState->Place = GameState->PlayersLeft;
+			CurrentMemberPlayerState->OnRep_Place();
+			FAthenaRewardResult Result{};
+			Result.TotalSeasonXpGained = CurrentMemberPC->XPComponent->TotalXpEarned;
+			Result.TotalBookXpGained = CurrentMemberPC->XPComponent->TotalXpEarned;
+			FAthenaMatchStats Stats{};
+			FAthenaMatchTeamStats TeamStats{};
+			TeamStats.Place = DeadPlayerState->Place;
+			TeamStats.TotalPlayers = GameState->TotalPlayers;
+			Stats.bIsValid = true;
+			CurrentMemberPC->ClientSendEndBattleRoyaleMatchForPlayer(true, Result);
+			CurrentMemberPC->ClientSendMatchStatsForPlayer(Stats);
+			CurrentMemberPC->ClientSendTeamStatsForPlayer(TeamStats);
+		}
+	}
+
+	if (KillerPlayerState && DeadPlayerState && DeadPlayerState != KillerPlayerState) {
 		PC->ClientReceiveKillNotification(KillerPlayerState, DeadPlayerState);
 		KillerPlayerState->ClientReportKill(DeadPlayerState);
 		KillerPlayerState->KillScore++;
@@ -772,14 +779,11 @@ void ClientOnPawnDiedHook(AFortPlayerControllerAthena* PC, FFortPlayerDeathRepor
 		KillerPlayerState->OnRep_Kills();
 		//KillerPlayerState->ClientReportTournamentStatUpdate
 	}
-	//DeadPlayerState->PawnDeathLocation = DeathLocation;
-	if (Misc::GetCurrentPlaylist()->RespawnType == EAthenaRespawnType::None) {
-		RemoveFromAlivePlayers(GameMode, PC, DeadPlayerState, KillerPawn, Item, DeadPlayerState->DeathInfo.DeathCause, 0);
-		PC->bMarkedAlive = false;
-	}
+	RemoveFromAlivePlayers(GameMode, PC, DeadPlayerState, KillerPawn, Item, DeadPlayerState->DeathInfo.DeathCause, 0);
+	PC->bMarkedAlive = false;
 
 	ClientOnPawnDiedOG(PC, DeathReport);
-	if (KillerPawn && KillerPlayerState && Item) {
+	if (KillerPawn && KillerPlayerState) {
 		
 		static auto Wood = Native::StaticLoadObject<UFortItemDefinition>("/Game/Items/ResourcePickups/WoodItemData.WoodItemData");
 		static auto Stone = Native::StaticLoadObject<UFortItemDefinition>("/Game/Items/ResourcePickups/StoneItemData.StoneItemData");
@@ -1006,8 +1010,12 @@ void ServerAttemptAircraftJump(UFortControllerComponent_Aircraft* thisPtr, const
 	if (!Controller || !Controller->IsInAircraft())
 		return;
 
-	if (bLategame)
-	{
+
+
+	GameMode->RestartPlayer(Controller);
+	Controller->ControlRotation = Rotation;
+
+	if (bLategame) {
 		int32 ArLoadoutIndex = UKismetMathLibrary::RandomIntegerInRange(0, ARLoadouts.size() - 1);
 		FLategameLoadout* ARLoadout = &ARLoadouts.at(ArLoadoutIndex);
 		Inventory::AddItem(Controller, ARLoadout->Definition, ARLoadout->Count);
@@ -1040,13 +1048,6 @@ void ServerAttemptAircraftJump(UFortControllerComponent_Aircraft* thisPtr, const
 		Inventory::AddItem(Controller, Stone, 450);
 		Inventory::AddItem(Controller, Metal, 350);
 
-
-	}
-
-	GameMode->RestartPlayer(Controller);
-	Controller->ControlRotation = Rotation;
-
-	if (bLategame) {
 		Controller->MyFortPawn->SetShield(100);
 	}
 }
@@ -1619,10 +1620,10 @@ void GivePickupTo(AFortPickup* thisPtr, IFortInventoryOwnerInterface* Interface,
 	UFortItemDefinition* PreviousItem = PreviousInstance ? PreviousInstance->ItemEntry.ItemDefinition : nullptr;
 
 	if (Inventory::GetQuickbar(PickupEntryPtr->ItemDefinition) != EFortQuickBars::Primary) {
-		Inventory::AddItem(Object, PickupEntryPtr);
+		Inventory::AddItemEntry(Object, PickupEntryPtr);
 	}
 	else if (PrimaryQuickbarItems < 5) {
-		Inventory::AddItem(Object, PickupEntryPtr);
+		Inventory::AddItemEntry(Object, PickupEntryPtr);
 	}
 	else {
 		if (ItemToDrop && ItemToDrop->IsA(UFortWeaponMeleeItemDefinition::StaticClass())) {
@@ -1630,14 +1631,14 @@ void GivePickupTo(AFortPickup* thisPtr, IFortInventoryOwnerInterface* Interface,
 			//printf("PrevItem: %s\n", PreviousItem->GetName().c_str());
 			FSpawnPickupData Data{};
 			Data.ItemDefinition = PreviousItem;
-			Data.Count = PreviousInstance->ItemEntry.Count;
+			Data.Count = PreviousInstance ? PreviousInstance->ItemEntry.Count : 0;
 			Data.Location = Object->MyFortPawn->K2_GetActorLocation();
 			Data.PickupOwner = Object->MyFortPawn;
 			Data.FortPickupSourceTypeFlag = EFortPickupSourceTypeFlag::Player;
 			Data.FortPickupSpawnSource = EFortPickupSpawnSource::Unset;
 			Inventory::SpawnPickup(Data);
 			Inventory::RemoveItem(Object, PreviousItemGuid, PreviousInstance->ItemEntry.Count);
-			Inventory::AddItem(Object, PickupEntryPtr);
+			Inventory::AddItemEntry(Object, PickupEntryPtr);
 		}
 		else if (ItemToDrop) {
 			FSpawnPickupData Data{};
@@ -1649,7 +1650,7 @@ void GivePickupTo(AFortPickup* thisPtr, IFortInventoryOwnerInterface* Interface,
 			Data.FortPickupSpawnSource = EFortPickupSpawnSource::Unset;
 			Inventory::SpawnPickup(Data);
 			Inventory::RemoveItem(Object, ItemGuid, Instance->ItemEntry.Count);
-			Inventory::AddItem(Object, PickupEntryPtr);
+			Inventory::AddItemEntry(Object, PickupEntryPtr);
 		}
 	}
 

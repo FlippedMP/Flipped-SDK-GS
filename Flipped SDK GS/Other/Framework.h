@@ -52,7 +52,7 @@ namespace Util
 	template <typename T>
 	__forceinline T* Cast(UObject* Object)
 	{
-		if (Object && Object->IsA(T::StaticClass()))
+		if (Object && Object->Class && Object->IsA(T::StaticClass()))
 			return reinterpret_cast<T*>(Object);
 
 		return nullptr;

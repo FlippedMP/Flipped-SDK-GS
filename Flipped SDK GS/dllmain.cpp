@@ -160,7 +160,7 @@ DWORD WINAPI Main(LPVOID)
 
 	Util::FHook("ABuildingActor::OnDamageServer", uint64_t(0x69E3008), OnDamageServer, DEFINE_OG(OnDamageServerOG));
 
-    Util::FHook<AFortPlayerControllerAthena>("AFortPlayerControllerAthena::ServerClientIsReadyToRespawn", uint32_t(0x553), ServerClientIsReadyToRespawn);
+    //Util::FHook<AFortPlayerControllerAthena>("AFortPlayerControllerAthena::ServerClientIsReadyToRespawn", uint32_t(0x553), ServerClientIsReadyToRespawn);
 
     FString MapName = bCreative ? L"open Creative_NoApollo_Terrain" : L"open Artemis_Terrain";
 

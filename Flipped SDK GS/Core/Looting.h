@@ -140,8 +140,6 @@ namespace Looting
                 return;
         }
 
-
-
         static UDataTable* LootPackages = nullptr;
         static UDataTable* LootTierData = nullptr;
 
