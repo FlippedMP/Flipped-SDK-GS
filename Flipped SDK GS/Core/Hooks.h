@@ -155,7 +155,7 @@ bool ReadyToStartMatch(AFortGameModeAthena* thisPtr)
 	if (thisPtr->CurrentPlaylistId == -1)
 	{
 		if (UFortPlaylistAthena* Playlist =
-			UObject::FindObject<UFortPlaylistAthena>(bCreative ? "FortPlaylistAthena Playlist_PlaygroundV2.Playlist_PlaygroundV2" : "FortPlaylistAthena Playlist_Low_Solo.Playlist_Low_Solo"))
+			UObject::FindObject<UFortPlaylistAthena>(bCreative ? "FortPlaylistAthena Playlist_PlaygroundV2.Playlist_PlaygroundV2" : "FortPlaylistAthena Playlist_DefaultSolo.Playlist_DefaultSolo"))
 		{
 			SetPlaylist(thisPtr, Playlist);
 
@@ -344,6 +344,9 @@ bool ReadyToStartMatch(AFortGameModeAthena* thisPtr)
 
 		printf("Playlist: %s\n", GameState->CurrentPlaylistInfo.BasePlaylist->GetName().c_str());
 
+		static UDataTable* AthenaRangedWeapons = Native::StaticLoadObject<UDataTable>("/Game/Athena/Items/Weapons/AthenaRangedWeapons.AthenaRangedWeapons");
+		Misc::ApplyDataTablePatch(AthenaRangedWeapons);
+
 		if (bLategame) {
 			LoadLateGameLoadouts();
 		}
@@ -376,8 +379,13 @@ bool ReadyToStartMatch(AFortGameModeAthena* thisPtr)
 			WarmupActors.Free();
 		}
 
-		static UDataTable* AthenaRangedWeapons = Native::StaticLoadObject<UDataTable>("/Game/Athena/Items/Weapons/AthenaRangedWeapons.AthenaRangedWeapons");
-		Misc::ApplyDataTablePatch(AthenaRangedWeapons);
+
+
+		static void* (*GameplayTags)() = decltype(GameplayTags)(Addresses::ImageBase + 0xC904C4);
+		TMap<FGameplayTag, int>& TagMap = *reinterpret_cast<TMap<FGameplayTag, int>*>(__int64(GameplayTags()) + 0x2850);
+		for (auto& [Tag, Val] : TagMap) {
+			UE_LOG(LogFlipped, Log, "Tag: %s", Tag.ToString().c_str());
+		}
 	}
 
 	
@@ -417,7 +425,7 @@ APawn* SpawnDefaultPawnFor(AFortGameModeAthena* thisPtr, AFortPlayerControllerAt
 			FLIPPED_LOG("Failed to get pickaxe!");
 	}
 
-	if (GameState->GamePhase >= EAthenaGamePhase::Aircraft) {
+	if (GameState->GamePhase > EAthenaGamePhase::Warmup) {
 		Inventory::RemoveAllDroppableItems(NewPlayer);
 	}
 
@@ -548,6 +556,12 @@ void ServerAcknowledgePossession(AFortPlayerControllerAthena* thisPtr, AFortPlay
 		UFortKismetLibrary::UpdatePlayerCustomCharacterPartsVisualization(PlayerState);
 	}
 	Misc::ApplyModifiersToPlayer(thisPtr);
+
+	UFortGameData* FortGameData = Util::Cast<UFortAssetManager>(UEngine::GetEngine()->AssetManager)->GameDataCommon;
+	if (auto Table = FortGameData->StatNamesToTrackTable.NewGet()) {
+		UE_LOG(LogFlipped, Log, "Table: %s", Table->GetFullName().c_str());
+
+	}
 }
 
 void ServerLoadingScreenDropped(AFortPlayerControllerAthena* thisPtr) 
@@ -660,13 +674,36 @@ void ServerExecuteInventoryItem(AFortPlayerControllerAthena* thisPtr, const FGui
 	if (!ItemInstance || !ItemInstance->ItemEntry.ItemDefinition)
 		return;
 
-	UFortWeaponItemDefinition* ItemDefinition = Util::Cast<UFortWeaponItemDefinition>(ItemInstance->ItemEntry.ItemDefinition);
+	UFortItemDefinition* ItemDefinition = ItemInstance->ItemEntry.ItemDefinition;
 
 	if (!ItemDefinition)
 		return;
 
-	if (auto Dih = thisPtr->MyFortPawn->EquipWeaponDefinition(ItemDefinition, ItemInstance->ItemEntry.ItemGuid, FGuid(), false)) {
 
+	UFortGadgetItemDefinition* GadgetItemDefinition = Util::Cast<UFortGadgetItemDefinition>(ItemDefinition);
+
+	if (GadgetItemDefinition) {
+		ItemDefinition = GadgetItemDefinition->GetWeaponItemDefinition();
+	}
+
+	UFortDecoItemDefinition* DecoItemDefinition = Util::Cast<UFortDecoItemDefinition>(ItemDefinition);
+
+	if (DecoItemDefinition) {
+		thisPtr->MyFortPawn->PickUpActor(nullptr, DecoItemDefinition);
+		thisPtr->MyFortPawn->GetCurrentWeapon()->ItemEntryGuid = ItemGUID;
+
+		if (thisPtr->MyFortPawn->GetCurrentWeapon()->IsA(AFortDecoTool_ContextTrap::StaticClass())) {
+			Util::Cast<AFortDecoTool_ContextTrap>(thisPtr->MyFortPawn->GetCurrentWeapon())->ContextTrapItemDefinition = (UFortContextTrapItemDefinition*)DecoItemDefinition;
+		}
+
+		return;
+	}
+
+	UFortWeaponItemDefinition* WeaponItemDefinition = Util::Cast<UFortWeaponItemDefinition>(ItemInstance->ItemEntry.ItemDefinition);
+
+	if (WeaponItemDefinition) {
+		FGuid TrackerGuid{};
+		thisPtr->MyFortPawn->EquipWeaponDefinition(WeaponItemDefinition, ItemInstance->ItemEntry.ItemGuid, TrackerGuid, false);
 	}
 }
 
@@ -680,6 +717,11 @@ void GetPlayerViewPointHook(AFortPlayerControllerAthena* PC, FVector& Location, 
 		Location = PC->GetViewTarget()->K2_GetActorLocation();
 		Rotation = PC->GetControlRotation();
 	}
+}
+
+DWORD WINAPI KillThread(LPVOID lpParam) {
+	Sleep(4000);
+	ExitProcess(0);
 }
 
 void (*RemoveFromAlivePlayers)(AFortGameMode* GameMode, AFortPlayerController* DeadPC, AFortPlayerState* KillerState, AFortPawn* KillerPawn, UFortWeaponItemDefinition* KillerWeapon, EDeathCause, char) = decltype(RemoveFromAlivePlayers)(uint64_t(GetModuleHandle(0)) + 0x5F9D3A8);
@@ -699,6 +741,8 @@ void ClientOnPawnDiedHook(AFortPlayerControllerAthena* PC, FFortPlayerDeathRepor
 
 	if (!DeadPlayerState)
 		return ClientOnPawnDiedOG(PC, DeathReport);
+
+	std::string PlayerName = DeadPlayerState->GetPlayerName().ToString();
 
 	DeadPlayerState->DeathInfo.bDBNO = DeadPawn->WasDBNOOnDeath();
 	DeadPlayerState->DeathInfo.bInitialized = true;
@@ -753,6 +797,14 @@ void ClientOnPawnDiedHook(AFortPlayerControllerAthena* PC, FFortPlayerDeathRepor
 			Result.TotalSeasonXpGained = CurrentMemberPC->XPComponent->TotalXpEarned;
 			Result.TotalBookXpGained = CurrentMemberPC->XPComponent->TotalXpEarned;
 			FAthenaMatchStats Stats{};
+			static void (*IncreaseStat)(FAthenaMatchStats*, const FGameplayTag * Stat, int Count) = decltype(IncreaseStat)(Addresses::ImageBase + 0x1B8FE08);
+			static void* (*GameplayTags)() = decltype(GameplayTags)(Addresses::ImageBase + 0xC904C4);
+			TMap<FGameplayTag, int>& TagMap = *reinterpret_cast<TMap<FGameplayTag, int>*>(__int64(GameplayTags()) + 0x2850);
+			for (auto& [Tag, Val] : TagMap) {
+				UE_LOG(LogFlipped, Log, "Tag: %s", Tag.ToString().c_str());
+			}
+			FGameplayTag NewTag = FGameplayTag(L"GameplayStat.Profile.Match.PersonalElimination");
+			IncreaseStat(&Stats, &NewTag, CurrentMemberPlayerState->KillScore);
 			FAthenaMatchTeamStats TeamStats{};
 			TeamStats.Place = DeadPlayerState->Place;
 			TeamStats.TotalPlayers = GameState->TotalPlayers;
@@ -760,6 +812,9 @@ void ClientOnPawnDiedHook(AFortPlayerControllerAthena* PC, FFortPlayerDeathRepor
 			CurrentMemberPC->ClientSendEndBattleRoyaleMatchForPlayer(true, Result);
 			CurrentMemberPC->ClientSendMatchStatsForPlayer(Stats);
 			CurrentMemberPC->ClientSendTeamStatsForPlayer(TeamStats);
+			std::wstring PlaylistId = std::to_wstring(Misc::GetCurrentPlaylist()->PlaylistId);
+			TDelegate<void(const void*)> CallbackDelegate;
+			//CurrentMemberPC->AthenaProfile->EndBattleRoyaleGameV2
 		}
 	}
 
@@ -777,12 +832,31 @@ void ClientOnPawnDiedHook(AFortPlayerControllerAthena* PC, FFortPlayerDeathRepor
 			CurrentMemberPlayerState->ClientReportTeamKill(CurrentMemberPlayerState->TeamKillScore);
 		}
 		KillerPlayerState->OnRep_Kills();
+
 		//KillerPlayerState->ClientReportTournamentStatUpdate
+		
 	}
 	RemoveFromAlivePlayers(GameMode, PC, DeadPlayerState, KillerPawn, Item, DeadPlayerState->DeathInfo.DeathCause, 0);
+	printf("Player %s has died\n", PlayerName.c_str());
 	PC->bMarkedAlive = false;
 
+	if (bUsesGameSessions) {
+		std::string URL = "http://15.235.16.134:3551/results/endofmatch/" + PlayerName;
+		int Hype = (DeadPlayerState->KillScore * 5) /*kills*/ + 125;
+		std::string JSON = "{"
+			"\"xp\": " + std::to_string(10000) + ", "
+			"\"vbucks\": " + std::to_string(100) + ", "
+			"\"hype\": " + std::to_string(Hype) + "}";
+		PostRequest(URL, JSON);
+	}
+
 	ClientOnPawnDiedOG(PC, DeathReport);
+
+	if (GameMode->AlivePlayers.Num() <= 1)
+	{
+		CreateThread(0, 0, KillThread, 0, 0, 0);
+	}
+
 	if (KillerPawn && KillerPlayerState) {
 		
 		static auto Wood = Native::StaticLoadObject<UFortItemDefinition>("/Game/Items/ResourcePickups/WoodItemData.WoodItemData");
@@ -1620,10 +1694,10 @@ void GivePickupTo(AFortPickup* thisPtr, IFortInventoryOwnerInterface* Interface,
 	UFortItemDefinition* PreviousItem = PreviousInstance ? PreviousInstance->ItemEntry.ItemDefinition : nullptr;
 
 	if (Inventory::GetQuickbar(PickupEntryPtr->ItemDefinition) != EFortQuickBars::Primary) {
-		Inventory::AddItemEntry(Object, PickupEntryPtr);
+		Inventory::AddItem(Object, PickupEntryPtr);
 	}
 	else if (PrimaryQuickbarItems < 5) {
-		Inventory::AddItemEntry(Object, PickupEntryPtr);
+		Inventory::AddItem(Object, PickupEntryPtr);
 	}
 	else {
 		if (ItemToDrop && ItemToDrop->IsA(UFortWeaponMeleeItemDefinition::StaticClass())) {
@@ -1638,7 +1712,7 @@ void GivePickupTo(AFortPickup* thisPtr, IFortInventoryOwnerInterface* Interface,
 			Data.FortPickupSpawnSource = EFortPickupSpawnSource::Unset;
 			Inventory::SpawnPickup(Data);
 			Inventory::RemoveItem(Object, PreviousItemGuid, PreviousInstance->ItemEntry.Count);
-			Inventory::AddItemEntry(Object, PickupEntryPtr);
+			Inventory::AddItem(Object, PickupEntryPtr);
 		}
 		else if (ItemToDrop) {
 			FSpawnPickupData Data{};
@@ -1650,7 +1724,7 @@ void GivePickupTo(AFortPickup* thisPtr, IFortInventoryOwnerInterface* Interface,
 			Data.FortPickupSpawnSource = EFortPickupSpawnSource::Unset;
 			Inventory::SpawnPickup(Data);
 			Inventory::RemoveItem(Object, ItemGuid, Instance->ItemEntry.Count);
-			Inventory::AddItemEntry(Object, PickupEntryPtr);
+			Inventory::AddItem(Object, PickupEntryPtr);
 		}
 	}
 

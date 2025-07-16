@@ -178,6 +178,7 @@ namespace Inventory
 			Item->SetOwningControllerForTemporaryItem(Controller);
 			Item->OwnerInventory = Controller->WorldInventory;
 
+
 			Item->ItemEntry.ItemDefinition = Definition;
 			Item->ItemEntry.Count = Count;
 			Item->ItemEntry.Level = 0;
@@ -349,6 +350,8 @@ namespace Inventory
 		if (!Controller)
 			return;
 
+		FLIPPED_LOG(__FUNCTION__);
+
 		for (size_t i = 0; i < Controller->WorldInventory->Inventory.ItemInstances.Num(); i++) {
 			if (Controller->WorldInventory->Inventory.ItemInstances[i]->CanBeDropped()) {
 				Controller->WorldInventory->Inventory.ItemInstances.Remove(i);
@@ -360,6 +363,8 @@ namespace Inventory
 		UpdateInventory(Controller);
 	}
 
+#define MAX_DURABILITY 0x3F800000
+
 	FFortItemEntry* MakeItemEntry(UFortItemDefinition* ItemDefinition, int32 Count, int32 Level) {
 		FFortItemEntry* IE = new FFortItemEntry();
 
@@ -370,7 +375,7 @@ namespace Inventory
 		IE->ItemDefinition = ItemDefinition;
 		IE->Count = Count;
 		IE->LoadedAmmo = GetClipSize(ItemDefinition);
-		IE->Durability = 1.f;
+		IE->Durability = MAX_DURABILITY;
 		IE->GameplayAbilitySpecHandle = FGameplayAbilitySpecHandle(-1);
 		IE->ParentInventory.ObjectIndex = -1;
 		IE->Level = Level;

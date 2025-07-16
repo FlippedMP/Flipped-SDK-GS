@@ -68,6 +68,12 @@ enum class EGameplayTagSelectionType : uint8
 struct FGameplayTag
 {
 public:
+	FGameplayTag() = default;
+	FORCEINLINE FGameplayTag(FName Tag) {
+		TagName = Tag;
+	}
+	FGameplayTag(std::wstring TagName);
+
 	class FName                                   TagName;                                           // 0x0000(0x0008)(Edit, ZeroConstructor, EditConst, SaveGame, IsPlainOldData, NoDestructor, Protected, HasGetValueTypeHash, NativeAccessSpecifierProtected)
 
 	FORCEINLINE bool operator==(const FGameplayTag& Other) const

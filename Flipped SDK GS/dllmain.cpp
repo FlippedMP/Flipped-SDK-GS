@@ -208,6 +208,7 @@ DWORD WINAPI Main(LPVOID)
     else {
         UKismetSystemLibrary::ExecuteConsoleCommand(GetWorld(), L"log off");
         UKismetSystemLibrary::ExecuteConsoleCommand(GetWorld(), L"log LogFortUIDirector", nullptr);
+        UKismetSystemLibrary::ExecuteConsoleCommand(GetWorld(), L"log LogAbilitySystem all", nullptr);
     }
 
 

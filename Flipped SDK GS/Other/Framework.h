@@ -16,6 +16,7 @@ using namespace SDK;
 #include "../Includes/MinHook/MinHook.h"
 #include "Memory.h"
 #include "Logger.h"
+#include "../Includes/curl/curl.h"
 
 // ts looks like a magma gs with this many random shit in here! :skull:
 
@@ -511,4 +512,38 @@ void VirtualHookInternal(void** _VTable, uint32_t _Index, void* _Detour, void** 
 		_VTable[_Index] = _Detour;
 		VirtualProtect(&_VTable[_Index], sizeof(void*), oldProtect, &oldProtect);
 	}
+}
+
+void OnBaseUrlResolved(void* Result)
+{
+	printf(__FUNCTION__);
+}
+
+void PostRequest(std::string URL, std::string JSON) {
+	CURL* curl;
+	CURLcode res;
+
+	curl_global_init(CURL_GLOBAL_ALL);
+	curl = curl_easy_init();
+	if (curl) {
+		struct curl_slist* headers = nullptr;
+		headers = curl_slist_append(headers, "Content-Type: application/json");
+		
+		curl_easy_setopt(curl, CURLOPT_URL, URL.c_str());
+		curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
+		curl_easy_setopt(curl, CURLOPT_POSTFIELDS, JSON.c_str());
+		curl_easy_setopt(curl, CURLOPT_POSTFIELDSIZE, JSON.length());
+
+		res = curl_easy_perform(curl);
+		if (res != CURLE_OK)
+			std::cerr << "curl_easy_perform() failed: " << curl_easy_strerror(res) << std::endl;
+
+		curl_slist_free_all(headers);
+		curl_easy_cleanup(curl);
+	}
+	curl_global_cleanup();
+}
+
+SDK::FGameplayTag::FGameplayTag(std::wstring TagName) {
+	this->TagName = UKismetStringLibrary::Conv_StringToName(TagName.c_str());
 }
