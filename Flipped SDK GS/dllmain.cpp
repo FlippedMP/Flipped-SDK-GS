@@ -158,6 +158,10 @@ DWORD WINAPI Main(LPVOID)
 #pragma region FortQuestManager
 #pragma endregion
 
+#pragma region SiphonAbility
+    ExecHook(UObject::FindObject<UFunction>("Function GA_Creative_OnKillSiphon.GA_Creative_OnKillSiphon_C.GiveResourcesToPlayer"), GiveResourcesToPlayer);
+#pragma endregion
+
 	Util::FHook("ABuildingActor::OnDamageServer", uint64_t(0x69E3008), OnDamageServer, DEFINE_OG(OnDamageServerOG));
 
     //Util::FHook<AFortPlayerControllerAthena>("AFortPlayerControllerAthena::ServerClientIsReadyToRespawn", uint32_t(0x553), ServerClientIsReadyToRespawn);

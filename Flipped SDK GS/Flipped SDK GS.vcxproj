@@ -169,6 +169,7 @@
     <ClCompile Include="Includes\SDK\SDK\Engine_functions.cpp" />
     <ClCompile Include="Includes\SDK\SDK\FortniteGame_functions.cpp" />
     <ClCompile Include="Includes\SDK\SDK\GameplayAbilities_functions.cpp" />
+    <ClCompile Include="Includes\SDK\SDK\GA_Creative_OnKillSiphon_functions.cpp" />
   </ItemGroup>
   <ItemGroup>
     <None Include="Includes\SDK\NameCollisions.inl" />

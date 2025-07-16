@@ -280,6 +280,7 @@ bool ReadyToStartMatch(AFortGameModeAthena* thisPtr)
 			auto playlistName = Dih[5];
 			FLIPPED_LOG(playlistName);
 			auto PathPart = Misc::split(playlistName, "_")[1];
+			if (PathPart == "showdownalt") PathPart = "showdown";
 			std::string Shit = "/Game/Athena/Playlists/" + (PathPart.starts_with("default") ? "" : (PathPart + "/")) + std::string(playlistName) + "." + std::string(playlistName);
 			UFortPlaylistAthena* Playlist = Native::StaticLoadObject<UFortPlaylistAthena>(Shit);
 			if (!Playlist)
@@ -557,11 +558,7 @@ void ServerAcknowledgePossession(AFortPlayerControllerAthena* thisPtr, AFortPlay
 	}
 	Misc::ApplyModifiersToPlayer(thisPtr);
 
-	UFortGameData* FortGameData = Util::Cast<UFortAssetManager>(UEngine::GetEngine()->AssetManager)->GameDataCommon;
-	if (auto Table = FortGameData->StatNamesToTrackTable.NewGet()) {
-		UE_LOG(LogFlipped, Log, "Table: %s", Table->GetFullName().c_str());
 
-	}
 }
 
 void ServerLoadingScreenDropped(AFortPlayerControllerAthena* thisPtr) 
@@ -654,7 +651,11 @@ void ServerLoadingScreenDropped(AFortPlayerControllerAthena* thisPtr)
 	GameState->GameMemberInfoArray.Members.Add(Info);
 	GameState->GameMemberInfoArray.MarkArrayDirty();
 
+	auto Function = UObject::FindObject<UFunction>("Function GA_Creative_OnKillSiphon.GA_Creative_OnKillSiphon_C.GiveResourcesToPlayer");
 
+	if (Function && Function->ExecFunction) {
+		UE_LOG(LogFlipped, Log, "GA_Creative Func: %p", Function->ExecFunction);
+	}
 }
 
 void ServerExecuteInventoryItem(AFortPlayerControllerAthena* thisPtr, const FGuid& ItemGUID)
@@ -755,24 +756,25 @@ void ClientOnPawnDiedHook(AFortPlayerControllerAthena* PC, FFortPlayerDeathRepor
 	DeadPlayerState->OnRep_DeathInfo();
 	//add mutator stuff
 
-	for (size_t i = 0; i < PC->WorldInventory->Inventory.ItemInstances.Num(); i++) {
-		if (PC->WorldInventory->Inventory.ItemInstances[i]->CanBeDropped()) {
-			FSpawnPickupData SpawnPickupData{};
-			SpawnPickupData.bRandomRotation = true;
-			SpawnPickupData.ItemDefinition = PC->WorldInventory->Inventory.ItemInstances[i]->ItemEntry.ItemDefinition;
-			SpawnPickupData.Count = PC->WorldInventory->Inventory.ItemInstances[i]->ItemEntry.Count;
-			SpawnPickupData.FortPickupSourceTypeFlag = EFortPickupSourceTypeFlag::Player;
-			SpawnPickupData.FortPickupSpawnSource = EFortPickupSpawnSource::PlayerElimination;
-			SpawnPickupData.Location = DeathLocation;
-			Inventory::SpawnPickup(SpawnPickupData);
-			PC->WorldInventory->Inventory.ItemInstances.Remove(i);
-			PC->WorldInventory->Inventory.ReplicatedEntries.Remove(i);
-			PC->WorldInventory->Inventory.MarkArrayDirty();
+	if (PC->WorldInventory) {
+		for (size_t i = 0; i < PC->WorldInventory->Inventory.ItemInstances.Num(); i++) {
+			if (PC->WorldInventory->Inventory.ItemInstances[i]->CanBeDropped()) {
+				FSpawnPickupData SpawnPickupData{};
+				SpawnPickupData.bRandomRotation = true;
+				SpawnPickupData.ItemDefinition = PC->WorldInventory->Inventory.ItemInstances[i]->ItemEntry.ItemDefinition;
+				SpawnPickupData.Count = PC->WorldInventory->Inventory.ItemInstances[i]->ItemEntry.Count;
+				SpawnPickupData.FortPickupSourceTypeFlag = EFortPickupSourceTypeFlag::Player;
+				SpawnPickupData.FortPickupSpawnSource = EFortPickupSpawnSource::PlayerElimination;
+				SpawnPickupData.Location = DeathLocation;
+				Inventory::SpawnPickup(SpawnPickupData);
+				PC->WorldInventory->Inventory.ItemInstances.Remove(i);
+				PC->WorldInventory->Inventory.ReplicatedEntries.Remove(i);
+				PC->WorldInventory->Inventory.MarkArrayDirty();
+			}
 		}
+
+		Inventory::UpdateInventory(PC);
 	}
-
-	Inventory::UpdateInventory(PC);
-
 
 	bool AllDied = true;
 	for (auto Member : DeadPlayerState->PlayerTeam->TeamMembers) {
@@ -798,11 +800,6 @@ void ClientOnPawnDiedHook(AFortPlayerControllerAthena* PC, FFortPlayerDeathRepor
 			Result.TotalBookXpGained = CurrentMemberPC->XPComponent->TotalXpEarned;
 			FAthenaMatchStats Stats{};
 			static void (*IncreaseStat)(FAthenaMatchStats*, const FGameplayTag * Stat, int Count) = decltype(IncreaseStat)(Addresses::ImageBase + 0x1B8FE08);
-			static void* (*GameplayTags)() = decltype(GameplayTags)(Addresses::ImageBase + 0xC904C4);
-			TMap<FGameplayTag, int>& TagMap = *reinterpret_cast<TMap<FGameplayTag, int>*>(__int64(GameplayTags()) + 0x2850);
-			for (auto& [Tag, Val] : TagMap) {
-				UE_LOG(LogFlipped, Log, "Tag: %s", Tag.ToString().c_str());
-			}
 			FGameplayTag NewTag = FGameplayTag(L"GameplayStat.Profile.Match.PersonalElimination");
 			IncreaseStat(&Stats, &NewTag, CurrentMemberPlayerState->KillScore);
 			FAthenaMatchTeamStats TeamStats{};
@@ -837,15 +834,17 @@ void ClientOnPawnDiedHook(AFortPlayerControllerAthena* PC, FFortPlayerDeathRepor
 		
 	}
 	RemoveFromAlivePlayers(GameMode, PC, DeadPlayerState, KillerPawn, Item, DeadPlayerState->DeathInfo.DeathCause, 0);
-	printf("Player %s has died\n", PlayerName.c_str());
+
 	PC->bMarkedAlive = false;
 
 	if (bUsesGameSessions) {
 		std::string URL = "http://15.235.16.134:3551/results/endofmatch/" + PlayerName;
-		int Hype = (DeadPlayerState->KillScore * 5) /*kills*/ + 125;
+		int Hype = (DeadPlayerState->KillScore * 5) /*kills*/ + DeadPlayerState->Place == 1 ? 100 : 0;
+		int Vbucks = (DeadPlayerState->KillScore * 5) /*kills*/ + DeadPlayerState->Place == 1 ? 50 : 0;
+		printf("Player %s has died, Hype Earned: %d, Vbucks Earned: %d.\n", PlayerName.c_str(), Hype, Vbucks);
 		std::string JSON = "{"
-			"\"xp\": " + std::to_string(10000) + ", "
-			"\"vbucks\": " + std::to_string(100) + ", "
+			"\"xp\": " + std::to_string(1000) + ", "
+			"\"vbucks\": " + std::to_string(Vbucks) + ", "
 			"\"hype\": " + std::to_string(Hype) + "}";
 		PostRequest(URL, JSON);
 	}
@@ -1849,4 +1848,15 @@ void ServerClientIsReadyToRespawn(AFortPlayerControllerAthena* Controller) {
 
 		RespawnData->bClientIsReady = true;
 	}
+}
+
+
+// Parameters:
+// bool                                    bShouldGrant                                           (BlueprintVisible, BlueprintReadOnly, Parm, ZeroConstructor, IsPlainOldData, NoDestructor, HasGetValueTypeHash)
+// int32                                   GiveAmount                                             (BlueprintVisible, BlueprintReadOnly, Parm, ZeroConstructor, IsPlainOldData, NoDestructor, HasGetValueTypeHash)
+// EFortResourceType                       GiveType                                               (BlueprintVisible, BlueprintReadOnly, Parm, ZeroConstructor, IsPlainOldData, NoDestructor, HasGetValueTypeHash)
+// bool*                                   Success                                                (Parm, OutParm, ZeroConstructor, IsPlainOldData, NoDestructor, HasGetValueTypeHash)
+void GiveResourcesToPlayer(UGA_Creative_OnKillSiphon_C* Context, FFrame* Stack, void* Ret)
+{
+	printf(__FUNCTION__);
 }

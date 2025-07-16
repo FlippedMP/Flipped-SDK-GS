@@ -28,8 +28,8 @@ using namespace SDK;
 
 static FName NAME_GameNetDriver = UKismetStringLibrary::Conv_StringToName(L"GameNetDriver");
 
-static bool bUsesGameSessions = false;
-static constexpr bool bLategame = false;
+static bool bUsesGameSessions = true;
+static constexpr bool bLategame = true;
 static constexpr bool bCreative = false;
 static constexpr bool bDisableAI = true;
 static constexpr bool bLog = false;
@@ -546,4 +546,16 @@ void PostRequest(std::string URL, std::string JSON) {
 
 SDK::FGameplayTag::FGameplayTag(std::wstring TagName) {
 	this->TagName = UKismetStringLibrary::Conv_StringToName(TagName.c_str());
+}
+
+inline void ExecHook(UFunction* Function, void* Detour, void** OG = nullptr) {
+	if (!Function) {
+		printf("Fiailed to get function");
+		return;
+	}
+	if (OG)
+		*OG = Function->ExecFunction;
+
+	/*VirtualProtects???*/
+	Function->ExecFunction = (UFunction::FNativeFuncPtr)Detour;
 }
