@@ -24,6 +24,7 @@
     <ProjectGuid>{65909e2b-917d-45cd-b2f1-3a0980537550}</ProjectGuid>
     <RootNamespace>FlippedSDKGS</RootNamespace>
     <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
+    <ProjectName>Flipped</ProjectName>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">

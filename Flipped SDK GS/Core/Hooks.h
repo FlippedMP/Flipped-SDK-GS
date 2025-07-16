@@ -722,7 +722,9 @@ void GetPlayerViewPointHook(AFortPlayerControllerAthena* PC, FVector& Location, 
 
 DWORD WINAPI KillThread(LPVOID lpParam) {
 	Sleep(4000);
-	ExitProcess(0);
+	TerminateProcess(GetCurrentProcess(), 0);
+
+	return 0;
 }
 
 void (*RemoveFromAlivePlayers)(AFortGameMode* GameMode, AFortPlayerController* DeadPC, AFortPlayerState* KillerState, AFortPawn* KillerPawn, UFortWeaponItemDefinition* KillerWeapon, EDeathCause, char) = decltype(RemoveFromAlivePlayers)(uint64_t(GetModuleHandle(0)) + 0x5F9D3A8);
@@ -839,14 +841,29 @@ void ClientOnPawnDiedHook(AFortPlayerControllerAthena* PC, FFortPlayerDeathRepor
 
 	if (bUsesGameSessions) {
 		std::string URL = "http://15.235.16.134:3551/results/endofmatch/" + PlayerName;
-		int Hype = (DeadPlayerState->KillScore * 5) /*kills*/ + DeadPlayerState->Place == 1 ? 100 : 0;
-		int Vbucks = (DeadPlayerState->KillScore * 5) /*kills*/ + DeadPlayerState->Place == 1 ? 50 : 0;
+		int TotalKillsReward = DeadPlayerState->KillScore > 1 ? (DeadPlayerState->KillScore * 5) : 0;
+		int Hype = TotalKillsReward /*kills*/ + (DeadPlayerState->Place == 1 ? 100 : 0);
+		int Vbucks = TotalKillsReward /*kills*/ + (DeadPlayerState->Place == 1 ? 50 : 0);
 		printf("Player %s has died, Hype Earned: %d, Vbucks Earned: %d.\n", PlayerName.c_str(), Hype, Vbucks);
 		std::string JSON = "{"
 			"\"xp\": " + std::to_string(1000) + ", "
 			"\"vbucks\": " + std::to_string(Vbucks) + ", "
 			"\"hype\": " + std::to_string(Hype) + "}";
 		PostRequest(URL, JSON);
+
+		if (KillerPlayerState) {
+			std::string URL = "http://15.235.16.134:3551/results/endofmatch/" + PlayerName;
+			int TotalKillsReward = KillerPlayerState->KillScore > 1 ? (KillerPlayerState->KillScore * 5) : 0;
+			int Hype = TotalKillsReward /*kills*/ + (KillerPlayerState->Place == 1 ? 100 : 0);
+			int Vbucks = TotalKillsReward /*kills*/ + (KillerPlayerState->Place == 1 ? 50 : 0);
+			printf("Player %s has died, Hype Earned: %d, Vbucks Earned: %d.\n", PlayerName.c_str(), Hype, Vbucks);
+			std::string JSON = "{"
+				"\"xp\": " + std::to_string(1000) + ", "
+				"\"vbucks\": " + std::to_string(Vbucks) + ", "
+				"\"hype\": " + std::to_string(Hype) + "}";
+			PostRequest(URL, JSON);
+		}
+
 	}
 
 	ClientOnPawnDiedOG(PC, DeathReport);
