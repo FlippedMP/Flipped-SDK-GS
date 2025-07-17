@@ -557,8 +557,6 @@ void ServerAcknowledgePossession(AFortPlayerControllerAthena* thisPtr, AFortPlay
 		UFortKismetLibrary::UpdatePlayerCustomCharacterPartsVisualization(PlayerState);
 	}
 	Misc::ApplyModifiersToPlayer(thisPtr);
-
-
 }
 
 void ServerLoadingScreenDropped(AFortPlayerControllerAthena* thisPtr) 
@@ -653,8 +651,10 @@ void ServerLoadingScreenDropped(AFortPlayerControllerAthena* thisPtr)
 
 	auto Function = UObject::FindObject<UFunction>("Function GA_Creative_OnKillSiphon.GA_Creative_OnKillSiphon_C.GiveResourcesToPlayer");
 
-	if (Function && Function->ExecFunction) {
-		UE_LOG(LogFlipped, Log, "GA_Creative Func: %p", Function->ExecFunction);
+	printf("ServerNotifications: %d", UFortRuntimeOptions::GetDefaultObj()->bUseServerTournamentPlacementNotifications);
+
+	if (!thisPtr->MatchReport) {
+		thisPtr->MatchReport = (UAthenaPlayerMatchReport*)UGameplayStatics::SpawnObject(UAthenaPlayerMatchReport::StaticClass(), thisPtr);
 	}
 }
 
@@ -723,7 +723,6 @@ void GetPlayerViewPointHook(AFortPlayerControllerAthena* PC, FVector& Location, 
 DWORD WINAPI KillThread(LPVOID lpParam) {
 	Sleep(4000);
 	TerminateProcess(GetCurrentProcess(), 0);
-
 	return 0;
 }
 
@@ -801,15 +800,12 @@ void ClientOnPawnDiedHook(AFortPlayerControllerAthena* PC, FFortPlayerDeathRepor
 			Result.TotalSeasonXpGained = CurrentMemberPC->XPComponent->TotalXpEarned;
 			Result.TotalBookXpGained = CurrentMemberPC->XPComponent->TotalXpEarned;
 			FAthenaMatchStats Stats{};
-			static void (*IncreaseStat)(FAthenaMatchStats*, const FGameplayTag * Stat, int Count) = decltype(IncreaseStat)(Addresses::ImageBase + 0x1B8FE08);
-			FGameplayTag NewTag = FGameplayTag(L"GameplayStat.Profile.Match.PersonalElimination");
-			IncreaseStat(&Stats, &NewTag, CurrentMemberPlayerState->KillScore);
 			FAthenaMatchTeamStats TeamStats{};
 			TeamStats.Place = DeadPlayerState->Place;
 			TeamStats.TotalPlayers = GameState->TotalPlayers;
 			Stats.bIsValid = true;
 			CurrentMemberPC->ClientSendEndBattleRoyaleMatchForPlayer(true, Result);
-			CurrentMemberPC->ClientSendMatchStatsForPlayer(Stats);
+			CurrentMemberPC->ClientSendMatchStatsForPlayer(CurrentMemberPC->MatchReport->MatchStats);
 			CurrentMemberPC->ClientSendTeamStatsForPlayer(TeamStats);
 			std::wstring PlaylistId = std::to_wstring(Misc::GetCurrentPlaylist()->PlaylistId);
 			TDelegate<void(const void*)> CallbackDelegate;
@@ -821,28 +817,54 @@ void ClientOnPawnDiedHook(AFortPlayerControllerAthena* PC, FFortPlayerDeathRepor
 		PC->ClientReceiveKillNotification(KillerPlayerState, DeadPlayerState);
 		KillerPlayerState->ClientReportKill(DeadPlayerState);
 		KillerPlayerState->KillScore++;
-		for (AController* CurrentMember : DeadPlayerState->PlayerTeam->TeamMembers) {
+		printf("Attempting to update current members");
+		for (AController* CurrentMember : KillerPlayerState->PlayerTeam->TeamMembers) {
 			AFortPlayerControllerAthena* CurrentMemberPC = Util::Cast<AFortPlayerControllerAthena>(CurrentMember);
 			if (!CurrentMemberPC) continue;
 			AFortPlayerStateAthena* CurrentMemberPlayerState = Util::Cast<AFortPlayerStateAthena>(CurrentMemberPC->PlayerState);
 			if (!CurrentMemberPlayerState) continue;
 			CurrentMemberPlayerState->TeamKillScore++;
 			CurrentMemberPlayerState->OnRep_TeamKillScore();
+			printf("ClientReportTeamKill");
 			CurrentMemberPlayerState->ClientReportTeamKill(CurrentMemberPlayerState->TeamKillScore);
 		}
 		KillerPlayerState->OnRep_Kills();
 
 		//KillerPlayerState->ClientReportTournamentStatUpdate
-		
 	}
 	RemoveFromAlivePlayers(GameMode, PC, DeadPlayerState, KillerPawn, Item, DeadPlayerState->DeathInfo.DeathCause, 0);
+	std::map<int, int> PlayersToPlacement;
+	PlayersToPlacement.insert({ 1,50 });
+	PlayersToPlacement.insert({ 2,25 });
+	PlayersToPlacement.insert({ 3,10 });
+	PlayersToPlacement.insert({ 4,10 });
+	PlayersToPlacement.insert({ 5,20 });
+	PlayersToPlacement.insert({ 10,10 });
+	PlayersToPlacement.insert({ 20,15 });
+	PlayersToPlacement.insert({ 25,15 });
+	PlayersToPlacement.insert({ 30,10 });
+	PlayersToPlacement.insert({ 40,10 });
+	PlayersToPlacement.insert({ 50,10 }); /*should be 0 for people in champs*/
 
+	if (!PlayersToPlacement.empty()) {
+		for (auto& [PlayersLeft, PointsEarned] : PlayersToPlacement) {
+			if (GameState->PlayersLeft == PlayersLeft) {
+				for (const auto& AlivePlayer : GameMode->AlivePlayers) {
+					printf("Player %s, Points Earned %d", AlivePlayer->GetFullName().c_str(), PointsEarned);
+					AlivePlayer->ClientReportTournamentPlacementPointsScored(PlayersLeft, PointsEarned);
+				}
+			}
+		}
+	}
+	else {
+		printf("GG");
+	}
 	PC->bMarkedAlive = false;
-
+	
 	if (bUsesGameSessions) {
 		std::string URL = "http://15.235.16.134:3551/results/endofmatch/" + PlayerName;
 		int TotalKillsReward = DeadPlayerState->KillScore > 1 ? (DeadPlayerState->KillScore * 5) : 0;
-		int Hype = TotalKillsReward /*kills*/ + (DeadPlayerState->Place == 1 ? 100 : 0);
+		int Hype = 0;
 		int Vbucks = TotalKillsReward /*kills*/ + (DeadPlayerState->Place == 1 ? 50 : 0);
 		printf("Player %s has died, Hype Earned: %d, Vbucks Earned: %d.\n", PlayerName.c_str(), Hype, Vbucks);
 		std::string JSON = "{"
@@ -850,23 +872,10 @@ void ClientOnPawnDiedHook(AFortPlayerControllerAthena* PC, FFortPlayerDeathRepor
 			"\"vbucks\": " + std::to_string(Vbucks) + ", "
 			"\"hype\": " + std::to_string(Hype) + "}";
 		PostRequest(URL, JSON);
-
-		if (KillerPlayerState) {
-			std::string URL = "http://15.235.16.134:3551/results/endofmatch/" + PlayerName;
-			int TotalKillsReward = KillerPlayerState->KillScore > 1 ? (KillerPlayerState->KillScore * 5) : 0;
-			int Hype = TotalKillsReward /*kills*/ + (KillerPlayerState->Place == 1 ? 100 : 0);
-			int Vbucks = TotalKillsReward /*kills*/ + (KillerPlayerState->Place == 1 ? 50 : 0);
-			printf("Player %s has died, Hype Earned: %d, Vbucks Earned: %d.\n", PlayerName.c_str(), Hype, Vbucks);
-			std::string JSON = "{"
-				"\"xp\": " + std::to_string(1000) + ", "
-				"\"vbucks\": " + std::to_string(Vbucks) + ", "
-				"\"hype\": " + std::to_string(Hype) + "}";
-			PostRequest(URL, JSON);
-		}
-
 	}
 
 	ClientOnPawnDiedOG(PC, DeathReport);
+
 
 	if (GameMode->AlivePlayers.Num() <= 1)
 	{

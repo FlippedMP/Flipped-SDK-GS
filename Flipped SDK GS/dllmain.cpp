@@ -10,7 +10,7 @@ DWORD WINAPI Main(LPVOID)
     SET_TITLE("Flipped 19.10 - Initializing...");
     Sleep(5000);
 
-    printf("MM: %p", Addresses::ImageBase);
+    //printf("MM: %p", Addresses::ImageBase);
 
     *(bool*)(Addresses::GIsClient) = false;
     *(bool*)(Addresses::GIsServer) = true;
@@ -213,6 +213,7 @@ DWORD WINAPI Main(LPVOID)
         UKismetSystemLibrary::ExecuteConsoleCommand(GetWorld(), L"log off");
         UKismetSystemLibrary::ExecuteConsoleCommand(GetWorld(), L"log LogFortUIDirector", nullptr);
         UKismetSystemLibrary::ExecuteConsoleCommand(GetWorld(), L"log LogAbilitySystem all", nullptr);
+        UKismetSystemLibrary::ExecuteConsoleCommand(GetWorld(), L"log LogFortUI all", nullptr);
     }
 
 
