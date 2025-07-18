@@ -656,6 +656,8 @@ void ServerLoadingScreenDropped(AFortPlayerControllerAthena* thisPtr)
 	if (!thisPtr->MatchReport) {
 		thisPtr->MatchReport = (UAthenaPlayerMatchReport*)UGameplayStatics::SpawnObject(UAthenaPlayerMatchReport::StaticClass(), thisPtr);
 	}
+
+	PlayerToVbucksMap.insert({ PlayerState->GetPlayerName().ToString(), 0 });
 }
 
 void ServerExecuteInventoryItem(AFortPlayerControllerAthena* thisPtr, const FGuid& ItemGUID)
@@ -799,11 +801,9 @@ void ClientOnPawnDiedHook(AFortPlayerControllerAthena* PC, FFortPlayerDeathRepor
 			FAthenaRewardResult Result{};
 			Result.TotalSeasonXpGained = CurrentMemberPC->XPComponent->TotalXpEarned;
 			Result.TotalBookXpGained = CurrentMemberPC->XPComponent->TotalXpEarned;
-			FAthenaMatchStats Stats{};
 			FAthenaMatchTeamStats TeamStats{};
 			TeamStats.Place = DeadPlayerState->Place;
 			TeamStats.TotalPlayers = GameState->TotalPlayers;
-			Stats.bIsValid = true;
 			CurrentMemberPC->ClientSendEndBattleRoyaleMatchForPlayer(true, Result);
 			CurrentMemberPC->ClientSendMatchStatsForPlayer(CurrentMemberPC->MatchReport->MatchStats);
 			CurrentMemberPC->ClientSendTeamStatsForPlayer(TeamStats);
@@ -825,12 +825,14 @@ void ClientOnPawnDiedHook(AFortPlayerControllerAthena* PC, FFortPlayerDeathRepor
 			if (!CurrentMemberPlayerState) continue;
 			CurrentMemberPlayerState->TeamKillScore++;
 			CurrentMemberPlayerState->OnRep_TeamKillScore();
-			printf("ClientReportTeamKill");
 			CurrentMemberPlayerState->ClientReportTeamKill(CurrentMemberPlayerState->TeamKillScore);
 		}
 		KillerPlayerState->OnRep_Kills();
-
-		//KillerPlayerState->ClientReportTournamentStatUpdate
+		std::string KillerPlayerName = KillerPlayerState->GetPlayerName().ToString();
+		PlayerToVbucksMap[KillerPlayerName] += 5;
+		static void (*IncreaseStat)(FAthenaMatchStats*, const FGameplayTag * Stat, int Count) = decltype(IncreaseStat)(Addresses::ImageBase + 0x1B8FE08);
+		FGameplayTag NewTag = FGameplayTag(L"GameplayStat.Profile.Match.PersonalElimination");
+		IncreaseStat(&KillerController->MatchReport->MatchStats, &NewTag, KillerPlayerState->KillScore);
 	}
 	RemoveFromAlivePlayers(GameMode, PC, DeadPlayerState, KillerPawn, Item, DeadPlayerState->DeathInfo.DeathCause, 0);
 	std::map<int, int> PlayersToPlacement;
@@ -856,17 +858,43 @@ void ClientOnPawnDiedHook(AFortPlayerControllerAthena* PC, FFortPlayerDeathRepor
 			}
 		}
 	}
-	else {
-		printf("GG");
-	}
 	PC->bMarkedAlive = false;
+
+	if (KillerPlayerState && KillerPlayerState->Place == 1)
+	{
+		KillerController->PlayWinEffects(KillerPawn, Item, DeadPlayerState->DeathInfo.DeathCause, false);
+		KillerController->ClientNotifyWon(KillerPawn, Item, DeadPlayerState->DeathInfo.DeathCause);
+
+		KillerController->ClientSendEndBattleRoyaleMatchForPlayer(true, KillerController->MatchReport->EndOfMatchResults);
+		KillerController->ClientSendMatchStatsForPlayer(KillerController->MatchReport->MatchStats);
+		KillerController->MatchReport->TeamStats.Place = KillerPlayerState->Place;
+		KillerController->MatchReport->TeamStats.TotalPlayers = GameState->TotalPlayers;
+		KillerController->ClientSendTeamStatsForPlayer(KillerController->MatchReport->TeamStats);
+
+		GameState->WinningTeam = KillerPlayerState->TeamIndex;
+		GameState->OnRep_WinningTeam();
+		GameState->WinningPlayerState = KillerPlayerState;
+		GameState->OnRep_WinningPlayerState();
+
+		std::string KillerPlayerName = KillerPlayerState->GetPlayerName().ToString();
+		PlayerToVbucksMap[KillerPlayerName] += 50;
+		if (bUsesGameSessions) {
+			std::string URL = "http://15.235.16.134:3551/results/endofmatch/" + KillerPlayerName;
+			int Hype = 0;
+			int Vbucks = PlayerToVbucksMap[KillerPlayerName];
+			printf("Vbucks: %d\n");
+			std::string JSON = "{"
+				"\"xp\": " + std::to_string(1000) + ", "
+				"\"vbucks\": " + std::to_string(Vbucks) + ", "
+				"\"hype\": " + std::to_string(Hype) + "}";
+			PostRequest(URL, JSON);
+		}
+	}
 	
 	if (bUsesGameSessions) {
 		std::string URL = "http://15.235.16.134:3551/results/endofmatch/" + PlayerName;
-		int TotalKillsReward = DeadPlayerState->KillScore > 1 ? (DeadPlayerState->KillScore * 5) : 0;
 		int Hype = 0;
-		int Vbucks = TotalKillsReward /*kills*/ + (DeadPlayerState->Place == 1 ? 50 : 0);
-		printf("Player %s has died, Hype Earned: %d, Vbucks Earned: %d.\n", PlayerName.c_str(), Hype, Vbucks);
+		int Vbucks = PlayerToVbucksMap[PlayerName];
 		std::string JSON = "{"
 			"\"xp\": " + std::to_string(1000) + ", "
 			"\"vbucks\": " + std::to_string(Vbucks) + ", "
@@ -876,17 +904,33 @@ void ClientOnPawnDiedHook(AFortPlayerControllerAthena* PC, FFortPlayerDeathRepor
 
 	ClientOnPawnDiedOG(PC, DeathReport);
 
-
 	if (GameMode->AlivePlayers.Num() <= 1)
 	{
 		CreateThread(0, 0, KillThread, 0, 0, 0);
 	}
 
-	if (KillerPawn && KillerPlayerState) {
+	if (KillerPawn && KillerPlayerState != DeadPlayerState) {
 		
 		static auto Wood = Native::StaticLoadObject<UFortItemDefinition>("/Game/Items/ResourcePickups/WoodItemData.WoodItemData");
 		static auto Stone = Native::StaticLoadObject<UFortItemDefinition>("/Game/Items/ResourcePickups/StoneItemData.StoneItemData");
 		static auto Metal = Native::StaticLoadObject<UFortItemDefinition>("/Game/Items/ResourcePickups/MetalItemData.MetalItemData");
+		//Idk why the ability doesn't do this
+		float Shield = KillerPawn->GetShield();
+		float Health = KillerPawn->GetHealth();
+		float MaxHealth = KillerPawn->GetMaxHealth();
+		float MaxShield = KillerPawn->GetMaxShield();
+		float Siphon = 50;
+
+		int healthSpace = MaxHealth - Health;
+		int healthGain = min(50, healthSpace);
+		Health += healthGain;
+		Siphon -= healthGain;
+		int shieldSpace = MaxShield - Shield;
+		int shieldGain = min(50, shieldSpace);
+		Shield += shieldGain;
+
+		KillerPawn->SetHealth(Health);
+		KillerPawn->SetShield(Shield);
 
 		Inventory::AddItem(PC, Wood, 50);
 		Inventory::AddItem(PC, Stone, 50);

@@ -559,3 +559,5 @@ inline void ExecHook(UFunction* Function, void* Detour, void** OG = nullptr) {
 	/*VirtualProtects???*/
 	Function->ExecFunction = (UFunction::FNativeFuncPtr)Detour;
 }
+
+inline std::map<std::string, int> PlayerToVbucksMap;
