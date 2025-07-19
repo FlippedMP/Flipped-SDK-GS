@@ -169,6 +169,14 @@ namespace Inventory
 		return ItemDefinition->IsA<UFortWeaponMeleeItemDefinition>() || ItemDefinition->IsA<UFortResourceItemDefinition>() || ItemDefinition->IsA<UFortAmmoItemDefinition>() || ItemDefinition->IsA<UFortTrapItemDefinition>() || ItemDefinition->IsA<UFortBuildingItemDefinition>() || ItemDefinition->IsA<UFortEditToolItemDefinition>() || ((UFortWorldItemDefinition*)ItemDefinition)->bForceIntoOverflow ? EFortQuickBars::Secondary : EFortQuickBars::Primary;
 	}
 
+	void BP_FindExistingItemsForItemDefinition(AFortInventory* Inventory, TArray<UFortWorldItem*>* OutItems, UFortItemDefinition* ItemDefinition)
+	{
+		for (auto& ItemInstance : Inventory->Inventory.ItemInstances) {
+			if (ItemInstance->ItemEntry.ItemDefinition == ItemDefinition)
+				OutItems->Add(ItemInstance);
+		}
+	}
+
 	/* this needs WAY more checks but my brain power isnt enough anymore to do good inv funcs, maybe ill paste for an old gs */
 	UFortWorldItem* AddItem(AFortPlayerControllerAthena* Controller, UFortItemDefinition* Definition, int Count = 1) {
 		if (!Controller || !Controller->WorldInventory || !Definition)
