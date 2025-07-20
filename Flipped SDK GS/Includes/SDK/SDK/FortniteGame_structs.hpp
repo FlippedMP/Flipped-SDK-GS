@@ -18316,6 +18316,13 @@ public:
 	uint8                                         Pad_148[0x50];                                     // 0x0148(0x0050)(Fixing Size After Last Property [ Dumper-7 ])
 	int32                                         PickupVariantIndex;                                // 0x0198(0x0004)(ZeroConstructor, Transient, IsPlainOldData, NoDestructor, HasGetValueTypeHash, NativeAccessSpecifierPrivate)
 	int32                                         ItemVariantDataMappingIndex;                       // 0x019C(0x0004)(ZeroConstructor, Transient, IsPlainOldData, NoDestructor, HasGetValueTypeHash, NativeAccessSpecifierPrivate)
+
+
+public:
+	FORCEINLINE void SetCount(int32 NewCount) {
+		static void (*SetCountOriginal)(FFortItemEntry*, int32) = decltype(SetCountOriginal)(uintptr_t(GetModuleHandle(0)) + 0x64E6AC4);
+		return SetCountOriginal(this, NewCount);
+	}
 };
 
 // ScriptStruct FortniteGame.GliderTrailParticleDefinition

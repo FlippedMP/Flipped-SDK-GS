@@ -185,8 +185,6 @@ namespace Inventory
 		if (UFortWorldItem* Item = Util::Cast<UFortWorldItem>(Definition->CreateTemporaryItemInstanceBP(Count, 0))) {
 			Item->SetOwningControllerForTemporaryItem(Controller);
 			Item->OwnerInventory = Controller->WorldInventory;
-
-
 			Item->ItemEntry.ItemDefinition = Definition;
 			Item->ItemEntry.Count = Count;
 			Item->ItemEntry.Level = 0;
