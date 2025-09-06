@@ -1,3 +1,3 @@
 # Flipped SDK GS
 
-this wont work btw! (good luck charm)
+Has some fun features idfk
