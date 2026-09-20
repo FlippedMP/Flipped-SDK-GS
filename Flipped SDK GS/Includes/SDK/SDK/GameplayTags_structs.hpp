@@ -160,6 +160,12 @@ public:
 	TArray<uint8>                                 QueryTokenStream;                                  // 0x0018(0x0010)(Edit, ZeroConstructor, NativeAccessSpecifierPrivate)
 	class FString                                 UserDescription;                                   // 0x0028(0x0010)(Edit, ZeroConstructor, HasGetValueTypeHash, NativeAccessSpecifierPrivate)
 	class FString                                 AutoDescription;                                   // 0x0038(0x0010)(Edit, ZeroConstructor, HasGetValueTypeHash, NativeAccessSpecifierPrivate)
+
+public:
+	bool IsEmpty()
+	{
+		return this->TokenStreamVersion == 0;
+	}
 };
 
 // ScriptStruct GameplayTags.GameplayTagCreationWidgetHelper

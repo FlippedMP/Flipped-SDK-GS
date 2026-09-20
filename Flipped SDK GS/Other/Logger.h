@@ -185,3 +185,4 @@ inline void UELogWImpl(FLogCategory& Category, ELogLevel Level,
 
 
 DEFINE_LOG_CATEGORY(LogFlipped);
+DEFINE_LOG_CATEGORY(LogLivingWorldManager);

@@ -105,15 +105,6 @@ DWORD WINAPI Main(LPVOID)
 #pragma endregion
 
 #pragma region AthenaAIServicePlayerBots
-    
-    PatchUse<uint16>(Addresses::ImageBase + 0x5EE9590, uint16_t(0xe990));
-
-    PatchUse<uint32>(Addresses::ImageBase + 0x5EE0507, uint32_t(0x1c4c899));
-    MH_CreateHook(LPVOID(Addresses::ImageBase + 0x7B2CDA4), InitalizeMMRInfos, nullptr);
-    MH_EnableHook(LPVOID(Addresses::ImageBase + 0x7B2CDA4));
-
-
-
     // Util::FHook("UAthenaAIServicePlayerBots::WaitForMatchAssignmentReady", uint64(0x5EE9524), WaitForMatchAssignmentReady, DEFINE_OG(WaitForMatchAssignmentReadyOG));
 #pragma endregion
 
@@ -142,10 +133,10 @@ DWORD WINAPI Main(LPVOID)
 #pragma endregion
 
 #pragma region FortAthenaAISpawnerDataComponent_AIBotCosmeticBase
-    Util::FHook("UFortAthenaAISpawnerDataComponent_AIBotCosmeticBase::GetDances", uint64_t(0x6A41D5C), AI::GetDances);
-    Util::FHook("UFortAthenaAISpawnerDataComponent_AIBotCosmeticBase::GetLoadout", uint64_t(0x6A41DE4), AI::GetLoadout);
-    Util::FHook("UFortAthenaAISpawnerDataComponent_InventoryBase::GetInventoryItems", uint64_t(0x6A42F4C), AI::GetInventoryItems);
-    Util::FHook("UFortAthenaAISpawnerDataComponent_InventoryBase::OnSpawned", uint64_t(0x5EC8548), AI::PostOnSpawned, DEFINE_OG(AI::PostOnSpawnedOG));
+    //Util::FHook("UFortAthenaAISpawnerDataComponent_AIBotCosmeticBase::GetDances", uint64_t(0x6A41D5C), AI::GetDances);
+    //Util::FHook("UFortAthenaAISpawnerDataComponent_AIBotCosmeticBase::GetLoadout", uint64_t(0x6A41DE4), AI::GetLoadout);
+    //Util::FHook("UFortAthenaAISpawnerDataComponent_InventoryBase::GetInventoryItems", uint64_t(0x6A42F4C), AI::GetInventoryItems);
+    //Util::FHook("UFortAthenaAISpawnerDataComponent_InventoryBase::OnSpawned", uint64_t(0x5EC8548), AI::PostOnSpawned, DEFINE_OG(AI::PostOnSpawnedOG));
 #pragma endregion
 
 #pragma region FortPickup
@@ -159,14 +150,29 @@ DWORD WINAPI Main(LPVOID)
 #pragma endregion
 
 #pragma region SiphonAbility
-    ExecHook(UObject::FindObject<UFunction>("Function GA_Creative_OnKillSiphon.GA_Creative_OnKillSiphon_C.GiveResourcesToPlayer"), GiveResourcesToPlayer);
+    //ExecHook(UObject::FindObject<UFunction>("Function GA_Creative_OnKillSiphon.GA_Creative_OnKillSiphon_C.GiveResourcesToPlayer"), GiveResourcesToPlayer);
 #pragma endregion
 
 	Util::FHook("ABuildingActor::OnDamageServer", uint64_t(0x69E3008), OnDamageServer, DEFINE_OG(OnDamageServerOG));
 
+    uintptr_t SpectatorSettingsFN = (uintptr_t)UObject::FindObject<UFunction>("Function FortniteGame.FortClientSettingsRecord.SetThirdPersonCameraCollision")->ExecFunction;
+    Util::FHook("Nigger", SpectatorSettingsFN - InSDKUtils::GetImageBase(), OnEnvQueryFinished);
     //Util::FHook<AFortPlayerControllerAthena>("AFortPlayerControllerAthena::ServerClientIsReadyToRespawn", uint32_t(0x553), ServerClientIsReadyToRespawn);
-
+    Util::FHook("Dih2", (uintptr_t)UObject::FindObject<UFunction>("Function LagerRuntime.FortAthenaLivingWorldVolume.RunEQS")->ExecFunction - InSDKUtils::GetImageBase(), RunEQS);
     FString MapName = bCreative ? L"open Creative_NoApollo_Terrain" : L"open Artemis_Terrain";
+
+    printf("PTr: %p\n", uintptr_t(
+        ((IFortAthenaLivingWorldPointProviderInterface*)
+            Native::GetInterfaceAddress(
+                AFortAthenaLivingWorldVolume::GetDefaultObj(),
+                IFortAthenaLivingWorldPointProviderInterface::StaticClass()))->VTable) - InSDKUtils::GetImageBase());
+
+    VirtualHookInternal(((IFortAthenaLivingWorldPointProviderInterface*)
+        Native::GetInterfaceAddress(
+            AFortAthenaLivingWorldVolume::GetDefaultObj(),
+            IFortAthenaLivingWorldPointProviderInterface::StaticClass()))->VTable, 0x50 / 8, EnablePointProvider);
+
+    Util::FHook("Dih3", uint64_t(0x536B014), Func, DEFINE_OG(funcog));
 
     UKismetSystemLibrary::ExecuteConsoleCommand(GetWorld(), MapName, nullptr);
     if (bLog) {

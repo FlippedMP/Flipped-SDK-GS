@@ -605,6 +605,15 @@ public:
 	{
 		return X == Other.X && Y == Other.Y && Z == Other.Z;
 	}
+
+	float DistSquared(const FVector& Other) const
+	{
+		float DX = Other.X - X;
+		float DY = Other.Y - Y;
+		float DZ = Other.Z - Z;
+
+		return (DX * DX) + (DY * DY) + (DZ * DZ);
+	}
 };
 
 // ScriptStruct CoreUObject.Box
@@ -616,6 +625,13 @@ public:
 	struct FVector                                Max;                                               // 0x000C(0x000C)(Edit, BlueprintVisible, ZeroConstructor, SaveGame, IsPlainOldData, NoDestructor, HasGetValueTypeHash, NativeAccessSpecifierPublic)
 	uint8                                         IsValid;                                           // 0x0018(0x0001)(ZeroConstructor, IsPlainOldData, NoDestructor, HasGetValueTypeHash, NativeAccessSpecifierPublic)
 	uint8                                         Pad_19[0x3];                                       // 0x0019(0x0003)(Fixing Struct Size After Last Property [ Dumper-7 ])
+
+	bool IsInside(const FVector& Point) const
+	{
+		return (Point.X >= Min.X && Point.X <= Max.X) &&
+			(Point.Y >= Min.Y && Point.Y <= Max.Y) &&
+			(Point.Z >= Min.Z && Point.Z <= Max.Z);
+	}
 };
 
 // ScriptStruct CoreUObject.Vector2D

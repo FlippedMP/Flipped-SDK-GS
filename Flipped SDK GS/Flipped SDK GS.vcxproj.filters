@@ -83,6 +83,12 @@
     <ClCompile Include="Includes\SDK\SDK\GA_Creative_OnKillSiphon_functions.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="Includes\SDK\SDK\LagerRuntime_functions.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="Includes\SDK\SDK\GameplayTags_functions.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <None Include="Includes\SDK\NameCollisions.inl">

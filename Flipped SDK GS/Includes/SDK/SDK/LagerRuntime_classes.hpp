@@ -31,6 +31,7 @@ namespace SDK
 class IFortAthenaLivingWorldPointProviderInterface final
 {
 public:
+	void** VTable;
 	void DisablePointProvider();
 	void EnablePointProvider();
 	struct FVector GetPointProviderLocation();
@@ -146,9 +147,9 @@ public:
 	TArray<TScriptInterface<class IFortAthenaLivingWorldPointProviderInterface>> RegisteredPointProviders; // 0x00A8(0x0010)(ZeroConstructor, Transient, UObjectWrapper, NativeAccessSpecifierPrivate)
 	TSoftObjectPtr<class UFortAthenaLivingWorldEncounter> EncounterDefinition;                       // 0x00B8(0x0028)(Transient, UObjectWrapper, HasGetValueTypeHash, NativeAccessSpecifierPrivate)
 	class AActor*                                 ActorDensityReservoir;                             // 0x00E0(0x0008)(ZeroConstructor, Transient, IsPlainOldData, NoDestructor, HasGetValueTypeHash, NativeAccessSpecifierPrivate)
-	uint8                                         Pad_E8[0x8];                                       // 0x00E8(0x0008)(Fixing Size After Last Property [ Dumper-7 ])
+	const FFortAthenaLivingWorldCategory* Category;
 	int32                                         CurrentStageIndex;                                 // 0x00F0(0x0004)(BlueprintVisible, BlueprintReadOnly, ZeroConstructor, Transient, IsPlainOldData, NoDestructor, HasGetValueTypeHash, NativeAccessSpecifierPrivate)
-	uint8                                         Pad_F4[0x4];                                       // 0x00F4(0x0004)(Fixing Size After Last Property [ Dumper-7 ])
+	float                                         LastGenerationTIme;
 	bool                                          bIsPaused;                                         // 0x00F8(0x0001)(BlueprintVisible, BlueprintReadOnly, ZeroConstructor, Transient, IsPlainOldData, NoDestructor, HasGetValueTypeHash, NativeAccessSpecifierPrivate)
 	uint8                                         Pad_F9[0x7];                                       // 0x00F9(0x0007)(Fixing Struct Size After Last Property [ Dumper-7 ])
 
@@ -159,6 +160,11 @@ public:
 	void ResumeEncounter();
 
 	int32 GetTotalActorCount() const;
+
+	TMap<class FFortAthenaLivingWorldEvent*, struct FLivingWorldEventRuntimeData>& EventRuntimeDataMap()
+	{
+		return *(TMap<FFortAthenaLivingWorldEvent*, FLivingWorldEventRuntimeData>*)(__int64(this) + 0x48);
+	}
 
 public:
 	static class UClass* StaticClass()
@@ -197,6 +203,120 @@ public:
 		return GetDefaultObjImpl<UFortAthenaLivingWorldEventData>();
 	}
 };
+
+struct __declspec(align(8)) FActorDescription
+{
+	TArray<TSubclassOf<UFortAthenaSpawnerDataBase>> MatchingSpawnerData;
+	TArray<FFortAthenaLivingWorldEventTagDensityRegistration> TagDensityRegistrations;
+	FGuid ActorSpawnerGUID;
+	TSubclassOf<AActor> ActorClass;
+	TWeakObjectPtr<UEnvQuery> SpawnAroundEnvironmentQuery;
+	float ActorDensityValue;
+	float DensityComputationRangeOverride;
+	bool bSpawnAroundDefaultPoint;
+	bool bUpdateDefaultPosition;
+};
+
+struct FActorInfo
+{
+	FVector SpawnPosition;
+	FGuid ActorSpawnerGUID;
+	TWeakObjectPtr<AActor> Actor;
+	TWeakObjectPtr<AActor> ActorSpawner;
+	TSubclassOf<UFortAthenaSpawnerDataBase> SpawnerDataToSpawn;
+	TSubclassOf<AActor> ActorTypeToSpawn;
+	int SpawnRequestID;
+	int32 DensityPreRegistration;
+	uint8_t TagPreRegistrations[0x10];
+};
+
+
+struct __declspec(align(8)) FEventRuntimeSpawnData
+{
+	TArray<FActorDescription> ActorDescriptions;
+	FString Name;
+	float MaxDensityComputationRange;
+	int MinActorCount;
+	int MaxActorCount;
+};
+
+struct FLivingWorldEventRuntimeData   // 0x80
+{
+	float               NextActivationTime;            // 0x00  init -1.0f, gates spawning
+	int32               CurrentSpawnedCount;          // 0x04
+	float               TotalPointProviderWeight;          // 0x08
+	float               MaxSpawnRadius;       // 0x0C  init -1.0f, cached
+	FGameplayTagQuery   ProviderFilterQuery;  // 0x10  0x48 bytes
+	TArray<FPointProviderFilterEntry> FilterEntries; // 0x58, stride 0x88
+	TArray<TScriptInterface<class IFortAthenaLivingWorldPointProviderInterface>> PointProviders; // 0x68, stride 0x10
+	bool                bDeactivated;             // 0x78
+	uint8               Pad79[7];             // 0x79
+};
+static_assert(sizeof(FLivingWorldEventRuntimeData) == 0x80);
+
+
+struct FLivingWorldCategoryRuntimeData   // 0x10
+{
+	class UDataTable* SelectedEventTable;  // 0x00  picked by weighted random per category
+	int32             CurrentSpawnedCount;         // 0x08
+	int32             Unknown00;               // 0x0C
+};
+static_assert(sizeof(FLivingWorldCategoryRuntimeData) == 0x10);
+
+struct __declspec(align(8)) FLivingWorldEventRequestData
+{
+	const FFortAthenaLivingWorldCategory* Category;
+	const FFortAthenaLivingWorldEvent* Event;
+	const FEventRuntimeSpawnData* RuntimeSpawnData;
+	UFortAthenaLivingWorldEncounterInstance* EncounterInstance;
+	TScriptInterface<IFortAthenaLivingWorldPointProviderInterface> PointProvider;
+	int ActorCountToSpawn;
+	int Id;
+	bool bUrgentRequest;
+};
+
+#pragma pack(push, 2)
+struct FLivingWorldSpawnPointRef
+{
+	FWeakObjectPtr Object;
+	int Key;
+};
+#pragma pack(pop)
+
+
+#pragma pack(push, 2)
+struct FActorInfo
+{
+	unsigned __int8 Unknown00[12];
+	FWeakObjectPtr SpawnedActor;
+	int Unknown14;
+	TScriptInterface<IFortAthenaLivingWorldPointProviderInterface> PointProvider;
+	int SpawnRequestId;
+	int GridKey;
+	FLivingWorldSpawnPointRef InlineStorage[1];
+	unsigned __int8 Pad3C[4];
+	FLivingWorldSpawnPointRef* Data;
+	int Num;
+	int Max;
+};
+#pragma pack(pop)
+
+
+#pragma pack(push, 2)
+struct FLivingWorldPendingActorSpawnEventRequest
+{
+	FFortAthenaLivingWorldCategory* Category;
+	FFortAthenaLivingWorldEvent* Event;
+	FWeakObjectPtr EventData;
+	UFortAthenaLivingWorldEncounterInstance* EncounterInstance;
+	int ActorCount;
+	int Unknown24;
+	TArray<FActorInfo> ActorInfos;
+	FScriptDelegate OnRequestFinished;
+};
+#pragma pack(pop)
+
+
 
 // Class LagerRuntime.FortAthenaLivingWorldManager
 // 0x0790 (0x0840 - 0x00B0)
@@ -243,7 +363,7 @@ public:
 	void LivingWorldManagerToggleGenerateEvents();
 	void LivingWorldManagerToggleVerboseLogging();
 	void OnActorSpawned(class AActor* Actor, int32 RequestID);
-	void OnCurrentPlaylistLoaded(class FName PlaylistName, const struct FGameplayTagContainer& PlaylistContextTags);
+	void OnCurrentPlaylistLoaded(class FName PlaylistName,  const struct FGameplayTagContainer& PlaylistContextTags);
 	void OnPatrolPathAdded(class AFortAthenaPatrolPath* PatrolPath);
 	void OnRep_ActorClassToPreloadOnClient();
 	void OnRep_DebugDensityMinimapIndicator(class UFortAthenaLivingWorldDebugDensityMiniMapIndicator* OldMapIndicator);
@@ -255,6 +375,46 @@ public:
 	class UFortAthenaLivingWorldEncounterInstance* StartEncounter(const TSoftObjectPtr<class UFortAthenaLivingWorldEncounter> EncounterType, const TArray<TScriptInterface<class IFortAthenaLivingWorldPointProviderInterface>>& EncounterPointProviders, class AActor* ActorDensityReservoir);
 	bool TrySpawnEvent(const struct FDataTableRowHandle& EventEntry, const struct FTransform& SpawnLocation, const TDelegate<void(const TArray<class AActor*>& SpawnedActors, bool bSuccess)>& OnRequestFinished);
 
+public:
+	TMap<FFortAthenaLivingWorldEvent*, FLivingWorldEventRuntimeData>& EventRuntimeDataMap()
+	{
+		return *(TMap<FFortAthenaLivingWorldEvent*, FLivingWorldEventRuntimeData>*)(__int64(this) + 0x498);
+	}
+
+	TMap<FFortAthenaLivingWorldCategory const*, FLivingWorldCategoryRuntimeData const*>& CategoryRuntimeDataMap() const
+	{
+		return *(TMap<FFortAthenaLivingWorldCategory const*, FLivingWorldCategoryRuntimeData const*>*)(__int64(this) + 0x4E8);
+	}
+
+	float& NextEventGenerationTime()
+	{
+		return *(float*)(__int64(this) + 0x5A0);
+	}
+
+	TArray< FLivingWorldEventRequestData>& PendingEventRequests()
+	{
+		return *(TArray< FLivingWorldEventRequestData>*)(__int64(this) + 0x390);
+	}
+
+	TArray< FLivingWorldPendingActorSpawnEventRequest>& PendingActorSpawnRequests()
+	{
+		return *(TArray< FLivingWorldPendingActorSpawnEventRequest>*)(__int64(this) + 0x478);
+	}
+
+	FGameplayTagContainer& CachedPlaylistContextTags()
+	{
+		return *reinterpret_cast<FGameplayTagContainer*>(__int64(this) + 0x5A8);
+	}
+
+	bool& bVerboseLogging()
+	{
+		return *(bool*)(__int64(this) + 0x5C9);
+	}
+
+	TMulticastInlineDelegate<void (TScriptInterface<IFortAthenaLivingWorldPointProviderInterface> const &)>& OnPointProviderRegistered()
+	{
+		return *(TMulticastInlineDelegate<void(TScriptInterface<IFortAthenaLivingWorldPointProviderInterface> const&)>*)(__int64(this) + 0x648);
+	}
 public:
 	static class UClass* StaticClass()
 	{
@@ -403,6 +563,36 @@ public:
 
 	bool DoesStartEnabled() const;
 	bool IsPointProviderEnabled() const;
+
+	bool& bIsEnabled()
+	{
+		return *reinterpret_cast<bool*>(__int64(this) + 0x388);
+	}
+
+	bool& bIsRegistered()
+	{
+		return *reinterpret_cast<bool*>(__int64(this) + 0x389);
+	}
+
+	TArray<FVector>& EnvironmentQueryResults()
+	{
+		return *reinterpret_cast<TArray<FVector>*>(__int64(this) + 0x390);
+	}
+
+	TArray<FVector>& ClusteredEnvironmentQueryResults()
+	{
+		return *reinterpret_cast<TArray<FVector>*>(__int64(this) + 0x3E0);
+	}
+
+	uint64_t& OnWorldInitPostDataLoadDelegateHandle()
+	{
+		return *reinterpret_cast<uint64_t*>(__int64(this) + 0x498);
+	}
+
+	int32& EQSRequestId()
+	{
+		return *reinterpret_cast<int32*>(__int64(this) + 0x490);
+	}
 
 public:
 	static class UClass* StaticClass()

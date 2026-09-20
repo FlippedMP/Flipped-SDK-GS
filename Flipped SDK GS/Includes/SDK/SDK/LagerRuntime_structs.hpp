@@ -210,6 +210,9 @@ public:
 	struct FFortAthenaLivingWorldEventDespawnCondition DespawnCondition;                             // 0x00D8(0x0018)(Edit, DisableEditOnInstance, NoDestructor, NativeAccessSpecifierPrivate)
 	struct FGameplayTagContainer                  RequirePlaylistTags;                               // 0x00F0(0x0020)(Edit, DisableEditOnInstance, NativeAccessSpecifierPrivate)
 	struct FLivingWorldCalendarEventConditions    CalendarEventConditions;                           // 0x0110(0x0018)(Edit, DisableEditOnInstance, NativeAccessSpecifierPrivate)
+
+public:
+	bool IsActive(const FGameplayTagContainer& PlaylistContextTags);
 };
 
 // ScriptStruct LagerRuntime.PointProviderFilterEntry
