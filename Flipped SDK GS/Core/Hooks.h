@@ -517,9 +517,7 @@ TScriptInterface<IFortAthenaLivingWorldPointProviderInterface> GetRandomPointPro
 		if (PointProvider.ObjectPointer && PointProvider.InterfacePointer)
 		{
 			FGameplayTagContainer ProviderTags;
-			void** VTable = ((IFortAthenaLivingWorldPointProviderInterface*)PointProvider.InterfacePointer)->VTable;
-			void (*GetFilterTags)(IFortAthenaLivingWorldPointProviderInterface*, FGameplayTagContainer*) = decltype(GetFilterTags)(VTable[(0x18 / 8)]);
-			GetFilterTags((IFortAthenaLivingWorldPointProviderInterface*)PointProvider.InterfacePointer,&ProviderTags);
+			((IFortAthenaLivingWorldPointProviderInterface*)PointProvider.InterfacePointer)->GetFiltersTags(&ProviderTags);
 
 			if (ProviderQuery.IsEmpty() || UBlueprintGameplayTagLibrary::DoesContainerMatchTagQuery(ProviderTags, ProviderQuery))
 			{
@@ -530,8 +528,6 @@ TScriptInterface<IFortAthenaLivingWorldPointProviderInterface> GetRandomPointPro
 			}
 		}
 	}
-
-	printf("ValidPointProviders: %d\n", ValidPointProviders.Num());
 
 	if (ValidPointProviders.Num() > 0)
 	{
@@ -544,8 +540,8 @@ TScriptInterface<IFortAthenaLivingWorldPointProviderInterface> GetRandomPointPro
 	return TScriptInterface<IFortAthenaLivingWorldPointProviderInterface>();
 }
 
-inline TArray<FLivingWorldEventRequestData> EventRequests;
-inline int IdGenerator;
+static inline TArray<FLivingWorldEventRequestData> EventRequests;
+static int IdGenerator;
 void GenerateEventRequests(UFortAthenaLivingWorldManager* __this,
 	UFortAthenaLivingWorldEncounterInstance* EncounterInstance,
 	const FFortAthenaLivingWorldCategory* Category,
@@ -623,22 +619,16 @@ void GenerateEventRequests(UFortAthenaLivingWorldManager* __this,
 					RequestData.EncounterInstance = EncounterInstance;
 					RequestData.ActorCountToSpawn = AvailableEventSpawns;
 
-					printf("SelectedEvent: %p\n", SelectedEvent);
-
 					EventRequests.Add(RequestData);
 
 					EventRuntimeData.CurrentSpawnedCount += AvailableEventSpawns;
 					CategoryRuntimeData.CurrentSpawnedCount += AvailableEventSpawns;
 
 					SpawnedCount += AvailableEventSpawns;
-					break;
-				}
-				else
-				{
-					printf("No provider\n");
-					break;
 				}
 			}
+			
+			SpawnedCount++;
 		}
 	}
 }
@@ -834,122 +824,6 @@ void GenerateEvents(UFortAthenaLivingWorldManager* __this)
 	}
 }
 
-inline TArray<UFortAthenaAISpawnerData*> SpawnerDatas;
-void CreateSpawnRequestFromEventRequest(UFortAthenaLivingWorldManager* __this, FLivingWorldEventRequestData* EventRequest)
-{
-	printf(__FUNCTION__"\n");
-	const FFortAthenaLivingWorldEvent* Event = EventRequest->Event;
-
-	if (!Event || !__this->CachedWorld)
-	{
-		printf("No event or cachedworld\n");
-		return;
-	}
-
-	if (!EventRequest->PointProvider.InterfacePointer)
-	{
-		printf("No pointprovider\n");
-		//CancelEventRequest(EventRequest);
-		return;
-	}
-
-	IdGenerator++;
-
-	UFortAthenaLivingWorldEncounterInstance* EncounterInstance = EventRequest->EncounterInstance;
-	TMap<FFortAthenaLivingWorldEvent*, FLivingWorldEventRuntimeData>* TargetEventRuntimeDataMap = &__this->EventRuntimeDataMap();
-
-	static FLivingWorldEventRuntimeData& (*FindOrCreateEventRuntimeData)(const FFortAthenaLivingWorldEvent*, TMap<FFortAthenaLivingWorldEvent*, FLivingWorldEventRuntimeData>&) = decltype(FindOrCreateEventRuntimeData)(InSDKUtils::GetImageBase() + 0x5368170);
-	FLivingWorldEventRuntimeData& RuntimeData = FindOrCreateEventRuntimeData(Event, *TargetEventRuntimeDataMap);
-
-	bool bRequiresEQS = false;
-	float GridDensityValue = 0.0f;
-
-	int32 SpawnedCount = 0;
-
-	printf("ActorCount: %d\n", EventRequest->ActorCountToSpawn);
-	if (EventRequest->ActorCountToSpawn > 0)
-	{
-		auto EventData = Event->EventData.NewGet();
-		printf("EventData: %s\n", EventData->GetFullName().c_str());
-
-		FFortAthenaLivingWorldEventDataActorSpawnDescription& RandDescription = EventData->ActorDescriptions[(UKismetMathLibrary::RandomIntegerInRange(0, EventData->ActorDescriptions.Num() - 1))];
-		FVector Loc;
-		FRotator Rot;
-		void** VTable = ((IFortAthenaLivingWorldPointProviderInterface*)EventRequest->PointProvider.InterfacePointer)->VTable;
-		void (*GetValidLocation)(IFortAthenaLivingWorldPointProviderInterface*, const struct FFortAthenaLivingWorldPointProviderFilterRules& PointFilter, struct FVector* OutPosition, struct FRotator* OutRotation) = decltype(GetValidLocation)(VTable[(0x10 / 8)]);
-		GetValidLocation(((IFortAthenaLivingWorldPointProviderInterface*)EventRequest->PointProvider.InterfacePointer),{}, &Loc, &Rot);
-		auto DesiredTagName = RandDescription.SpawnerDataTagQuery.TagDictionary[0].TagName;
-		UFortAthenaAISpawnerData* const* DataFound = SpawnerDatas.FindByPredicate([&](UFortAthenaAISpawnerData* Yes)
-			{
-				if (Yes->DescriptorTag.HasTag(DesiredTagName))
-					return true;
-				return false;
-			});
-		if (!DataFound) {
-			printf("No Data Found\n");
-			return;
-		}
-		if (auto ActualData = *DataFound)
-		{
-			printf("Hello\n");
-			printf("Data: %s\n", ActualData->GetFullName().c_str());
-
-			auto Shitty = ActualData->CreateComponentList(__this);
-			if (Shitty)
-			{
-				FTransform Transform{};
-				Transform.Translation = FVector(UKismetMathLibrary::RandomInteger64InRange(5,150), 1, 10000);
-				Transform.Rotation = {};
-				Transform.Scale3D = FVector(1, 1, 10000);
-				printf("Spawning bitch fuck boi at: Loc: %f, %f, %f\n", Loc.X, Loc.Y, Loc.Z);
-				int32 ID = ((UAthenaAISystem*)UWorld::GetWorld()->AISystem)->AISpawner->RequestSpawn(Shitty, Transform);
-				printf("ID: %d\n", ID);
-				return;
-			}
-		}
-	}
-}
-
-void ProcessEventRequests(UFortAthenaLivingWorldManager* __this)
-{
-	printf(__FUNCTION__"\n");
-	if (__this->CachedConfig)
-	{
-		printf("EventRequests: %d\n", EventRequests.Num());
-		int32 MaxEventsPerTick = UFortScalableFloatUtils::GetValueAsInteger(__this->CachedConfig->MaxEventSpawnPerTick,0.0f);
-		int32 NumToProcess = EventRequests.Num();
-
-		if (NumToProcess > 0)
-		{
-			for (int32 i = 0; i < NumToProcess; ++i)
-			{
-				CreateSpawnRequestFromEventRequest(__this, &EventRequests[i]);
-				EventRequests.Remove(NumToProcess);
-			}
-
-
-		}
-	}
-}
-
-DWORD WINAPI LivingWorldHeartbeat(LPVOID lpThread)
-{
-	UFortAthenaLivingWorldManager* Mgr = (UFortAthenaLivingWorldManager*)UWorld::GetWorld()->GameState->GetComponentByClass(UFortAthenaLivingWorldManager::StaticClass());
-	std::this_thread::sleep_for(std::chrono::milliseconds(10000));
-	printf(__FUNCTION__"\n");
-	//UWorld* World = UWorld::GetWorld();
-	//const float Now = UGameplayStatics::GetTimeSeconds(UWorld::GetWorld());               // UWorld+0x5D8
-
-	//if (Now < Mgr->NextEventGenerationTime())             // manager+0x5A0
-	//	return;
-
-	GenerateEvents(Mgr);                                // ImageBase + 0x536F1E4
-
-	ProcessEventRequests(Mgr);
-	//Mgr->NextEventGenerationTime() = Now + GetGenerationInterval(Mgr);
-	return 0;
-}
-
 void (*DispatchRequestOG)(__int64, __int64, int); void DispatchRequest(__int64 a1, __int64 a2, int a3) { return DispatchRequestOG(a1, a2, 3); }
 void (*TickFlushOG)(UNetDriver*); void TickFlush(UNetDriver* Driver) { 
 	if (Driver && Driver->ReplicationDriver && Driver->ClientConnections.Num() > 0) 
@@ -963,86 +837,9 @@ void (*TickFlushOG)(UNetDriver*); void TickFlush(UNetDriver* Driver) {
 		UKismetSystemLibrary::ExecuteConsoleCommand(UWorld::GetWorld(), L"demospeed 5", nullptr);
 	}
 
-	if (GetAsyncKeyState(VK_F3))
-	{
-		static bool bFirst = false;
-		if (!bFirst)
-		{
-			auto GameMode = (AFortGameModeAthena*)UWorld::GetWorld()->AuthorityGameMode;
-			auto GameState = (AFortGameStateAthena*)UWorld::GetWorld()->GameState;
-			bFirst = true;
-			if (UFortAthenaLivingWorldManager* LivingWorldManager = (UFortAthenaLivingWorldManager*)UWorld::GetWorld()->GameState->GetComponentByClass(UFortAthenaLivingWorldManager::StaticClass()))
-			{
-				LivingWorldManager->OnCurrentPlaylistLoaded(GameMode->CurrentPlaylistName, GameState->CurrentPlaylistInfo.BasePlaylist->GameplayTagContainer);
-				TArray<AFortAthenaLivingWorldVolume*> Volumes;
-				UGameplayStatics::GetAllActorsOfClass(UWorld::GetWorld(), AFortAthenaLivingWorldVolume::StaticClass(), (TArray<AActor*>*) & Volumes);
-				for (auto& Vol : Volumes)
-				{
-					if (!Vol->CachedLivingWorldManager)
-					{
-						Vol->CachedLivingWorldManager = LivingWorldManager;
-					}
-					Vol->OnCurrentPlaylistLoaded(GameMode->CurrentPlaylistName, GameState->CurrentPlaylistInfo.BasePlaylist->GameplayTagContainer);
-				}
-				for (int i = 0; i < UObject::GObjects->Num(); i++)
-				{
-					UObject* Object = UObject::GObjects->GetByIndex(i);
-					if (Object && Object->IsA(UFortAthenaAISpawnerData::StaticClass()))
-					{
-						auto Thing = (UFortAthenaAISpawnerData*)Object;
-						printf("Thing: %s, DescriptorTag: %s\n", Thing->GetFullName().c_str(), Thing->DescriptorTag.ToString().c_str());
-						SpawnerDatas.Add(Thing);
-					}
-				}
-				//void* (*GetWorldTimerManager)(AActor * __this) = decltype(GetWorldTimerManager)(InSDKUtils::GetImageBase() + 0xD24D28);
-				//FTimerUnifiedDelegate Delegate{};
-				//auto* Inst = static_cast<FEQSDelegateInstance*>(FMemory::Realloc(nullptr, 0x30, 0));
-				//if (!Inst)
-				//	return;
-				//memset(Inst, 0, 0x30);
-
-				//Inst->VTable = reinterpret_cast<void**>(InSDKUtils::GetImageBase() + 0x8640CC8);
-				//Inst->Handle = NewDelegateHandle();
-				//Inst->UserObject.ObjectIndex = LivingWorldManager->Index;
-				//Inst->UserObject.ObjectSerialNumber = UObject::GObjects->GetSerialNumberByIndex(LivingWorldManager->Index);
-				//Inst->MethodPtr = reinterpret_cast<void*>(&LivingWorldHeartbeat);
-
-				//FTimerHandle Handle{};
-				//FDelegateBase FinishDelegate{};
-				//FinishDelegate.Data = reinterpret_cast<decltype(FinishDelegate.Data)>(Inst);
-				//FinishDelegate.DelegateSize = 3;
-				//Delegate.FuncDelegate = FinishDelegate;
-				//*reinterpret_cast<int32*>(&Delegate.FuncDynDelegate[0]) = -1;
-				//float Interval = LivingWorldManager->NextEventGenerationTime() - UGameplayStatics::GetTimeSeconds(UWorld::GetWorld());
-				//if (Interval <= 0.0f)
-				//	Interval = 30.0f;                                           // must be > 0 or the call is a no-op
-				////InternalSetTimer(GetWorldTimerManager(thisPtr), &Handle, &Delegate, 5.0, true, -1.0f);
-
-				//printf("handle = %llu\n", *reinterpret_cast<uint64*>(&Handle));
-				//auto IsSafeToExecute = reinterpret_cast<bool(*)(void*)>(Inst->VTable[6]);   // +0x30
-				//auto ExecuteIfSafe = reinterpret_cast<bool(*)(void*)>(Inst->VTable[10]);  // +0x50
-				//printf("safe = %d\n", IsSafeToExecute(Inst));
-				//printf("fired = %d\n", ExecuteIfSafe(Inst));
-				//FMemory::Free(Inst);
-				CreateThread(0, 0, LivingWorldHeartbeat, 0, 0, 0);
-			}
-		}
-	}
-
 	if (GetAsyncKeyState(VK_F7) & 1 && Driver) {
-		if (!Driver->ClientConnections[0]->PlayerController->CheatManager)
-		{
-			Driver->ClientConnections[0]->PlayerController->CheatManager = (UCheatManager*)UGameplayStatics::SpawnObject(UCheatManager::StaticClass(), Driver->ClientConnections[0]->PlayerController);
-		}
-		Driver->ClientConnections[0]->PlayerController->CheatManager->God();
-		Driver->ClientConnections[0]->PlayerController->Pawn->K2_TeleportTo(FVector(0, 0, 10000), {});
-		TArray<AFortPlayerPawnAthena*> Pawns;
-		UGameplayStatics::GetAllActorsOfClass(UWorld::GetWorld(), AFortPlayerPawnAthena::StaticClass(), (TArray<AActor*>*) & Pawns);
-		for (auto& Pawn : Pawns)
-		{
-			static void (*yes)(UFortAthenaLivingWorldManager*, AActor*) = decltype(yes)(InSDKUtils::GetImageBase() + 0x5365f58);
-			yes((UFortAthenaLivingWorldManager*)UWorld::GetWorld()->GameState->GetComponentByClass(UFortAthenaLivingWorldManager::StaticClass()), Pawn);
-		}
+		FTransform Transform = Driver->ClientConnections[0]->PlayerController->Pawn->GetTransform();
+		AI::SpawnKlombo(Transform, 1);
 	}
 
 	if (GetAsyncKeyState(VK_F8) & 1) {
@@ -1604,7 +1401,18 @@ float GetGenerationInterval(UFortAthenaLivingWorldManager* Mgr)
 }
 
 
+void LivingWorldHeartbeat(UFortAthenaLivingWorldManager* Mgr)
+{
+	printf(__FUNCTION__"\n");
+	//UWorld* World = UWorld::GetWorld();
+	//const float Now = UGameplayStatics::GetTimeSeconds(UWorld::GetWorld());               // UWorld+0x5D8
 
+	//if (Now < Mgr->NextEventGenerationTime())             // manager+0x5A0
+	//	return;
+
+	GenerateEvents(Mgr);                                // ImageBase + 0x536F1E4
+	//Mgr->NextEventGenerationTime() = Now + GetGenerationInterval(Mgr);
+}
 
 void ServerLoadingScreenDropped(AFortPlayerControllerAthena* thisPtr) 
 {
@@ -1705,7 +1513,55 @@ void ServerLoadingScreenDropped(AFortPlayerControllerAthena* thisPtr)
 	PlayerToVbucksMap.insert({ PlayerState->GetPlayerName().ToString(), 0 });
 
 	auto GameMode = Util::Cast<AFortGameModeAthena>(GameState->AuthorityGameMode);
-	
+	static bool bFirst = false;
+	if (!bFirst)
+	{
+		bFirst = true;
+		if (UFortAthenaLivingWorldManager* LivingWorldManager = (UFortAthenaLivingWorldManager*)GameMode->GameState->GetComponentByClass(UFortAthenaLivingWorldManager::StaticClass()))
+		{
+			LivingWorldManager->OnCurrentPlaylistLoaded(GameMode->CurrentPlaylistName, GameState->CurrentPlaylistInfo.BasePlaylist->GameplayTagContainer);
+			TArray<AFortAthenaLivingWorldVolume*> Volumes;
+			UGameplayStatics::GetAllActorsOfClass(UWorld::GetWorld(), AFortAthenaLivingWorldVolume::StaticClass(), (TArray<AActor*>*) & Volumes);
+			for (auto& Vol : Volumes)
+			{
+				if (!Vol->CachedLivingWorldManager)
+				{
+					Vol->CachedLivingWorldManager = LivingWorldManager;
+				}
+				Vol->OnCurrentPlaylistLoaded(GameMode->CurrentPlaylistName, GameState->CurrentPlaylistInfo.BasePlaylist->GameplayTagContainer);
+			}
+			void* (*GetWorldTimerManager)(AActor * __this) = decltype(GetWorldTimerManager)(InSDKUtils::GetImageBase() + 0xD24D28);
+			FTimerUnifiedDelegate Delegate{};
+			auto* Inst = static_cast<FEQSDelegateInstance*>(FMemory::Realloc(nullptr, 0x30, 0));
+			if (!Inst)
+				return;
+			memset(Inst, 0, 0x30);
+
+			Inst->VTable = reinterpret_cast<void**>(InSDKUtils::GetImageBase() + 0x8640CC8);
+			Inst->Handle = NewDelegateHandle();
+			Inst->UserObject.ObjectIndex = LivingWorldManager->Index;
+			Inst->UserObject.ObjectSerialNumber = UObject::GObjects->GetSerialNumberByIndex(LivingWorldManager->Index);
+			Inst->MethodPtr = reinterpret_cast<void*>(&LivingWorldHeartbeat);
+
+			FTimerHandle Handle{};
+			FDelegateBase FinishDelegate{};
+			FinishDelegate.Data = reinterpret_cast<decltype(FinishDelegate.Data)>(Inst);
+			FinishDelegate.DelegateSize = 3;
+			Delegate.FuncDelegate = FinishDelegate;
+			*reinterpret_cast<int32*>(&Delegate.FuncDynDelegate[0]) = -1;
+			float Interval = LivingWorldManager->NextEventGenerationTime() - UGameplayStatics::GetTimeSeconds(UWorld::GetWorld());
+			if (Interval <= 0.0f)
+				Interval = 30.0f;                                           // must be > 0 or the call is a no-op
+			//InternalSetTimer(GetWorldTimerManager(thisPtr), &Handle, &Delegate, 5.0, true, -1.0f);
+
+			printf("handle = %llu\n", *reinterpret_cast<uint64*>(&Handle));
+			auto IsSafeToExecute = reinterpret_cast<bool(*)(void*)>(Inst->VTable[6]);   // +0x30
+			auto ExecuteIfSafe = reinterpret_cast<bool(*)(void*)>(Inst->VTable[10]);  // +0x50
+			printf("safe = %d\n", IsSafeToExecute(Inst));
+			printf("fired = %d\n", ExecuteIfSafe(Inst));
+			FMemory::Free(Inst);
+		}
+	}
 }
 
 void ServerExecuteInventoryItem(AFortPlayerControllerAthena* thisPtr, const FGuid& ItemGUID)

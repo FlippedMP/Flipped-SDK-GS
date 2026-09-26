@@ -216,6 +216,21 @@ struct __declspec(align(8)) FActorDescription
 	bool bSpawnAroundDefaultPoint;
 	bool bUpdateDefaultPosition;
 };
+
+struct FActorInfo
+{
+	FVector SpawnPosition;
+	FGuid ActorSpawnerGUID;
+	TWeakObjectPtr<AActor> Actor;
+	TWeakObjectPtr<AActor> ActorSpawner;
+	TSubclassOf<UFortAthenaSpawnerDataBase> SpawnerDataToSpawn;
+	TSubclassOf<AActor> ActorTypeToSpawn;
+	int SpawnRequestID;
+	int32 DensityPreRegistration;
+	uint8_t TagPreRegistrations[0x10];
+};
+
+
 struct __declspec(align(8)) FEventRuntimeSpawnData
 {
 	TArray<FActorDescription> ActorDescriptions;
