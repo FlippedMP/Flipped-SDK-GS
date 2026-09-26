@@ -28,11 +28,11 @@ using namespace SDK;
 
 static FName NAME_GameNetDriver = UKismetStringLibrary::Conv_StringToName(L"GameNetDriver");
 
-static bool bUsesGameSessions = false;
-static constexpr bool bLategame = false;
+static bool bUsesGameSessions = true;
+static constexpr bool bLategame = true;
 static constexpr bool bCreative = false;
 static constexpr bool bDisableAI = true;
-static constexpr bool bLog = true;
+static constexpr bool bLog = false;
 
 enum EHookType
 {
@@ -72,7 +72,7 @@ namespace Util
 	template <typename UEClass = UObject> // if it works we dont change it head ass code right here!
 	struct FHook : public FHookBase
 	{
-	public:
+	private:
 		void* Detour = nullptr;
 		void** VTable = nullptr;
 		uint32_t Index = 0;
@@ -558,76 +558,6 @@ inline void ExecHook(UFunction* Function, void* Detour, void** OG = nullptr) {
 
 	/*VirtualProtects???*/
 	Function->ExecFunction = (UFunction::FNativeFuncPtr)Detour;
-}
-
-#include <random>
-inline float FRand()
-{
-	static std::mt19937 rng(std::random_device{}());
-	static std::uniform_real_distribution<float> dist(0.0f, 1.0f);
-
-	return dist(rng);
-}
-
-struct FTimerUnifiedDelegate
-{
-public:
-	FDelegateBase FuncDelegate;
-	uint8_t FuncDynDelegate[0xC];
-	uint8_t FuncCallback[0x20];
-};
-
-void InternalSetTimer(void* a1, FTimerHandle* InOutHandle, FTimerUnifiedDelegate* InDelegate, float InRate, bool InbLoop, float InFirstDelay)
-{
-	static void (*SEtTimer)(void*, FTimerHandle * InOutHandle, FTimerUnifiedDelegate * InDelegate, float InRate, bool InbLoop, float InFirstDelay) = decltype(SEtTimer)(InSDKUtils::GetImageBase() + 0xBA1090);
-	return SEtTimer(a1, InOutHandle, InDelegate, InRate, InbLoop, InFirstDelay);
-}
-
-
-template<typename T>
-void ManualSwap(T& A, T& B)
-{
-	T Temp = A;
-	A = B;
-	B = Temp;
-}
-
-template<typename T, typename PredicateType>
-int32 ManualPartitionTArray(TArray<T>& Array, int32 Low, int32 High, PredicateType Pred)
-{
-	T Pivot = Array[High];
-	int32 i = Low - 1;
-
-	for (int32 j = Low; j < High; j++)
-	{
-		if (Pred(Array[j], Pivot))
-		{
-			i++;
-			ManualSwap(Array[i], Array[j]);
-		}
-	}
-	ManualSwap(Array[i + 1], Array[High]);
-	return i + 1;
-}
-
-template<typename T, typename PredicateType>
-void ManualQuickSortTArray(TArray<T>& Array, int32 Low, int32 High, PredicateType Pred)
-{
-	if (Low < High)
-	{
-		int32 Pi = ManualPartitionTArray(Array, Low, High, Pred);
-		ManualQuickSortTArray(Array, Low, Pi - 1, Pred);
-		ManualQuickSortTArray(Array, Pi + 1, High, Pred);
-	}
-}
-
-template<typename T, typename PredicateType>
-void ManualSort(TArray<T>& Array, PredicateType Pred)
-{
-	if (Array.Num() > 1)
-	{
-		ManualQuickSortTArray(Array, 0, Array.Num() - 1, Pred);
-	}
 }
 
 inline std::map<std::string, int> PlayerToVbucksMap;

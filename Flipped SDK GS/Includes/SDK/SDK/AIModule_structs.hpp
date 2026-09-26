@@ -647,34 +647,17 @@ public:
 	float                                         Value;                                             // 0x000C(0x0004)(Edit, BlueprintVisible, ZeroConstructor, IsPlainOldData, NoDestructor, HasGetValueTypeHash, NativeAccessSpecifierPublic)
 };
 
-struct FEnvQueryItem
-{
-	float Score;
-	__int32 DataOffset : 31;
-	unsigned __int32 bIsDiscarded : 1;
-};
-
 // ScriptStruct AIModule.EnvQueryResult
 // 0x0040 (0x0040 - 0x0000)
 struct FEnvQueryResult final
 {
 public:
-	TArray<FEnvQueryItem> Items;
+	uint8                                         Pad_0[0x10];                                       // 0x0000(0x0010)(Fixing Size After Last Property [ Dumper-7 ])
 	TSubclassOf<class UEnvQueryItemType>          ItemType;                                          // 0x0010(0x0008)(BlueprintVisible, BlueprintReadOnly, ZeroConstructor, IsPlainOldData, NoDestructor, UObjectWrapper, HasGetValueTypeHash, NativeAccessSpecifierPublic)
-	TArray<unsigned char>                         RawData;
-	EEnvQueryStatus                               Status;
+	uint8                                         Pad_18[0x14];                                      // 0x0018(0x0014)(Fixing Size After Last Property [ Dumper-7 ])
 	int32                                         OptionIndex;                                       // 0x002C(0x0004)(BlueprintVisible, BlueprintReadOnly, ZeroConstructor, IsPlainOldData, NoDestructor, HasGetValueTypeHash, NativeAccessSpecifierPublic)
 	int32                                         QueryID;                                           // 0x0030(0x0004)(BlueprintVisible, BlueprintReadOnly, ZeroConstructor, IsPlainOldData, NoDestructor, HasGetValueTypeHash, NativeAccessSpecifierPublic)
 	uint8                                         Pad_34[0xC];                                       // 0x0034(0x000C)(Fixing Struct Size After Last Property [ Dumper-7 ])
-
-public:
-	FVector GetItemAsLocation(int Index)
-	{
-		static FVector& (*GetItemAsLocationInternal)(FEnvQueryResult*, FVector*, int INdex) = decltype(GetItemAsLocationInternal)(InSDKUtils::GetImageBase() + 0x7cb505c);
-		FVector vec;
-		vec = GetItemAsLocationInternal(this, &vec, Index);
-		return vec;
-	}
 };
 
 // ScriptStruct AIModule.AIRequestID
@@ -931,13 +914,6 @@ public:
 	double                                        GenerationTimeWarningSeconds;                      // 0x0028(0x0008)(ZeroConstructor, Config, IsPlainOldData, NoDestructor, HasGetValueTypeHash, NativeAccessSpecifierPublic)
 };
 
-struct __declspec(align(8)) FDelegateBase
-{
-public:
-	void* Data;
-	int DelegateSize;
-};
-
 // ScriptStruct AIModule.EnvQueryRequest
 // 0x0068 (0x0068 - 0x0000)
 struct FEnvQueryRequest final
@@ -946,19 +922,7 @@ public:
 	class UEnvQuery*                              QueryTemplate;                                     // 0x0000(0x0008)(ZeroConstructor, IsPlainOldData, NoDestructor, Protected, UObjectWrapper, HasGetValueTypeHash, NativeAccessSpecifierProtected)
 	class UObject*                                Owner;                                             // 0x0008(0x0008)(ZeroConstructor, IsPlainOldData, NoDestructor, Protected, UObjectWrapper, HasGetValueTypeHash, NativeAccessSpecifierProtected)
 	class UWorld*                                 World;                                             // 0x0010(0x0008)(ZeroConstructor, IsPlainOldData, NoDestructor, Protected, UObjectWrapper, HasGetValueTypeHash, NativeAccessSpecifierProtected)
-	struct TMap<struct FName, float>                            NamedParams;
-
-	inline FEnvQueryRequest& SetFloatParam(FName ParamName, float Value) { NamedParams.Add(ParamName, Value); return *this; }
-	inline FEnvQueryRequest& SetIntParam(FName ParamName, int32 Value) { NamedParams.Add(ParamName, *((float*)&Value)); return *this; }
-	inline FEnvQueryRequest& SetBoolParam(FName ParamName, bool Value) { NamedParams.Add(ParamName, Value ? 1.0f : -1.0f); return *this; }
-	inline FEnvQueryRequest& SetNamedParam(const FEnvNamedValue& ParamData) { NamedParams.Add(ParamData.ParamName, ParamData.Value); return *this; }
-
-	
-	inline int32 Execute(EEnvQueryRunMode Mode, struct FDelegateBase InMethod)
-	{
-		static int32(*Ecadcfaed)(FEnvQueryRequest*, EEnvQueryRunMode, struct FDelegateBase) = decltype(Ecadcfaed)(InSDKUtils::GetImageBase() + 0x7CB21A8);
-		return Ecadcfaed(this, Mode, InMethod);
-	}
+	uint8                                         Pad_18[0x50];                                      // 0x0018(0x0050)(Fixing Struct Size After Last Property [ Dumper-7 ])
 };
 
 // ScriptStruct AIModule.EnvQueryInstanceCache

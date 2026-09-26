@@ -1550,24 +1550,5 @@ void UFortCheatManager_LivingWorldManager::LivingWorldManagerTeleportToSpawnPosi
 	Func->FunctionFlags = Flgs;
 }
 
-bool FFortAthenaLivingWorldEvent::IsActive(const FGameplayTagContainer& PlaylistContextTags)
-{
-	if (RequirePlaylistTags.GameplayTags.Num() > 0)
-	{
-		bool bHasAtleastOneTag = false;
-		for (auto& Tag : RequirePlaylistTags.GameplayTags)
-		{
-			if (PlaylistContextTags.HasTag(Tag)) {
-				bHasAtleastOneTag = true;
-				break;
-			}
-		}
-
-		return bHasAtleastOneTag && UFortScalableFloatUtils::GetValueAsBool(IsEnabled, 0.0f);
-	}
-
-	return UFortScalableFloatUtils::GetValueAsBool(IsEnabled, 0.0f);
-}
-
 }
 
