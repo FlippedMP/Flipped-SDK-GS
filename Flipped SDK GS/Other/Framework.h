@@ -28,11 +28,11 @@ using namespace SDK;
 
 static FName NAME_GameNetDriver = UKismetStringLibrary::Conv_StringToName(L"GameNetDriver");
 
-static bool bUsesGameSessions = true;
-static constexpr bool bLategame = true;
+static bool bUsesGameSessions = false;
+static constexpr bool bLategame = false;
 static constexpr bool bCreative = false;
-static constexpr bool bDisableAI = true;
-static constexpr bool bLog = false;
+static constexpr bool bDisableAI = false;
+static constexpr bool bLog = true;
 
 enum EHookType
 {
@@ -561,3 +561,4 @@ inline void ExecHook(UFunction* Function, void* Detour, void** OG = nullptr) {
 }
 
 inline std::map<std::string, int> PlayerToVbucksMap;
+

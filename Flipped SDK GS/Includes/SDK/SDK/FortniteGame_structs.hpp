@@ -25420,7 +25420,9 @@ struct FCachedPOIVolumeLocations final
 {
 public:
 	class AFortPoiVolume*                         POIVolume;                                         // 0x0000(0x0008)(ZeroConstructor, Transient, IsPlainOldData, NoDestructor, HasGetValueTypeHash, NativeAccessSpecifierPublic)
-	uint8                                         Pad_8[0x18];                                       // 0x0008(0x0018)(Fixing Struct Size After Last Property [ Dumper-7 ])
+	TArray<struct FVector> NavMeshLocations;
+	int NumLocationsReserved;
+	unsigned __int32 bEQSQueryPending : 1;
 };
 
 // ScriptStruct FortniteGame.HeroSubclassRarityAttributeData

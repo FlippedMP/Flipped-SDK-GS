@@ -605,6 +605,11 @@ public:
 	{
 		return X == Other.X && Y == Other.Y && Z == Other.Z;
 	}
+
+	std::string ToString() const
+	{
+		return std::format("X: {:.2f}, Y: {:.2f}, Z: {:.2f}", X, Y, Z);
+	}
 };
 
 // ScriptStruct CoreUObject.Box

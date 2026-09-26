@@ -179,7 +179,12 @@ struct FUObjectItem final
 {
 public:
 	class UObject*                                Object;                                            // 0x0000(0x0008)(NOT AUTO-GENERATED PROPERTY)
-	uint8                                         Pad_8[0x10];                                       // 0x0008(0x0010)(Fixing Struct Size After Last Property [ Dumper-7 ])
+	// Internal flags
+	int32 Flags;
+	// UObject Owner Cluster Index
+	int32 ClusterRootIndex;
+	// Weak Object Pointer Serial number associated with the object
+	int32 SerialNumber;
 };
 
 // Predefined struct TUObjectArray
@@ -224,6 +229,20 @@ public:
 		if (!ChunkPtr) return nullptr;
 		
 		return ChunkPtr[InChunkIdx].Object;
+	}
+
+	inline int32 GetSerialNumberByIndex(const int32 Index) const
+	{
+		const int32 ChunkIndex = Index / ElementsPerChunk;
+		const int32 InChunkIdx = Index % ElementsPerChunk;
+
+		if (Index < 0 || ChunkIndex >= NumChunks || Index >= NumElements)
+			return 0;
+
+		FUObjectItem* ChunkPtr = GetDecrytedObjPtr()[ChunkIndex];
+		if (!ChunkPtr) return 0;
+
+		return ChunkPtr[InChunkIdx].SerialNumber;
 	}
 };
 

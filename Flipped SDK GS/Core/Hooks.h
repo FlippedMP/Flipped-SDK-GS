@@ -18,8 +18,18 @@ void (*TickFlushOG)(UNetDriver*); void TickFlush(UNetDriver* Driver) {
 	}
 
 	if (GetAsyncKeyState(VK_F7) & 1 && Driver) {
-		FTransform Transform = Driver->ClientConnections[0]->PlayerController->Pawn->GetTransform();
-		AI::SpawnKlombo(Transform, 1);
+		UAthenaAIServicePlayerBots* AIService = UAthenaAIBlueprintLibrary::GetAIServicePlayerBots(UWorld::GetWorld());
+		if (AIService) {
+			if (AIService->CachedGameState && AIService->CachedAIPopulationTracker) {
+				for (auto& PlayerBot : AIService->PlayerBots) {
+					if (PlayerBot.BotController) {
+						Driver->ClientConnections[0]->PlayerController->Pawn->K2_TeleportTo(PlayerBot.BotController->PlayerBotPawn->K2_GetActorLocation(), {});
+						break;
+					}
+				}
+			}
+		}
+
 	}
 
 	if (GetAsyncKeyState(VK_F8) & 1) {
@@ -464,6 +474,69 @@ APawn* SpawnDefaultPawnFor(AFortGameModeAthena* thisPtr, AFortPlayerControllerAt
 				}
 			}
 		}
+
+		UAthenaAIServicePlayerBots* AIServicePlayerBots = UAthenaAIBlueprintLibrary::GetAIServicePlayerBots(UWorld::GetWorld());
+
+		TArray<AFortPoiVolume*> Volumes;
+		UGameplayStatics::GetAllActorsOfClass(UWorld::GetWorld(), AFortPoiVolume::StaticClass(), (TArray<AActor*>*) & Volumes);
+
+		for (auto volume : Volumes)
+		{
+			FCachedPOIVolumeLocations Loc{};
+			Loc.bEQSQueryPending = false;
+			printf("navMeshLoc: %s\n", volume->K2_GetActorLocation().ToString().c_str());
+			Loc.NavMeshLocations.Add(volume->K2_GetActorLocation());
+			Loc.POIVolume = volume;
+			AIServicePlayerBots->CachedValidPOIVolumeLocations.Add(Loc);
+		}
+
+		for (auto& idk : AIServicePlayerBots->OnGroundTagQueryPOIList)
+		{
+			for (auto volume : Volumes)
+			{
+				if (volume->ContainsLocationTag(idk.POIFilterQuery.TagDictionary[0]))
+				{
+
+					idk.ValidPOIVolumeList.Add(volume);
+				}
+			}
+		}
+
+		for (auto& idk : AIServicePlayerBots->BattleBusTagQueryPOIList)
+		{
+			for (auto volume : Volumes)
+			{
+				if (volume->ContainsLocationTag(idk.POIFilterQuery.TagDictionary[0]))
+				{
+
+					idk.ValidPOIVolumeList.Add(volume);
+				}
+			}
+		}
+
+		for (auto& idk : AIServicePlayerBots->SecondaryBattleBusTagQueryPOIList)
+		{
+			for (auto volume : Volumes)
+			{
+				if (volume->ContainsLocationTag(idk.POIFilterQuery.TagDictionary[0]))
+				{
+
+					idk.ValidPOIVolumeList.Add(volume);
+				}
+			}
+		}
+
+		Volumes.Free();
+
+		TArray<ABuildingFoundation*> Foundations;
+		UGameplayStatics::GetAllActorsOfClass(UWorld::GetWorld(), ABuildingFoundation::StaticClass(), (TArray<AActor*>*) & Foundations);
+
+		for (auto foundation : Foundations)
+		{
+			AIServicePlayerBots->CachedBuildingFoundations.Add(foundation);
+		}
+
+		Foundations.Free();
 
 		bFirst = true;
 	}
@@ -1809,8 +1882,9 @@ void StartAircraftPhase(AFortGameModeAthena* GameMode, bool a2) {
 			for (auto& PlayerBot : AIService->PlayerBots) {
 				if (PlayerBot.BotController) {
 					auto Aircraft = AIService->CachedGameState->Aircrafts[0];
-					//printf("Teleporting %s to aircraft\n", PlayerBot.BotController->GetName().c_str());
+					printf("Teleporting %s to aircraft\n", PlayerBot.BotController->GetName().c_str());
 					Native::EnterAircraft(PlayerBot.BotController, Aircraft);
+
 				}
 			}
 		}
@@ -1929,4 +2003,222 @@ void ServerClientIsReadyToRespawn(AFortPlayerControllerAthena* Controller) {
 void GiveResourcesToPlayer(UGA_Creative_OnKillSiphon_C* Context, FFrame* Stack, void* Ret)
 {
 	printf(__FUNCTION__);
+}
+
+static const float PoiVolumeHalfHeight = 50000.f;
+
+static TWeakObjectPtr<UWorld> CachedBuildingFoundationsWorld;
+static TArray<AActor*> CachedBuildingFoundations;
+
+static const TArray<AActor*>& GetBuildingFoundations(UWorld* World)
+{
+	if (CachedBuildingFoundationsWorld.Get() != World || CachedBuildingFoundations.Num() == 0)
+	{
+		CachedBuildingFoundations.Free();
+		if (World)
+		{
+			UGameplayStatics::GetAllActorsOfClass(World, ABuildingFoundation::StaticClass(), (TArray<AActor*>*) & CachedBuildingFoundations);
+		}
+		CachedBuildingFoundationsWorld.ObjectIndex = World->Index;
+		CachedBuildingFoundationsWorld.ObjectSerialNumber = UObject::GObjects->GetSerialNumberByIndex(World->Index);
+	}
+
+	return CachedBuildingFoundations;
+}
+
+static void AddPointToBoundsKismet(FVector& Min, FVector& Max, const FVector& Point, bool& bInitialized)
+{
+	if (!bInitialized)
+	{
+		Min = Point;
+		Max = Point;
+		bInitialized = true;
+		return;
+	}
+
+	Min = FVector(UKismetMathLibrary::Min(Min.X, Point.X), UKismetMathLibrary::Min(Min.Y, Point.Y), UKismetMathLibrary::Min(Min.Z, Point.Z));
+	Max = FVector(UKismetMathLibrary::Max(Max.X, Point.X), UKismetMathLibrary::Max(Max.Y, Point.Y), UKismetMathLibrary::Max(Max.Z, Point.Z));
+}
+
+bool GetLocationFromChallengeMapPoiData(AFortPoiVolume* __this, FVector& OutLocation)
+{
+	UFortQuestIndicatorData* QuestIndicatorData = ((UFortAssetManager*)UFortEngine::GetEngine()->AssetManager)->GameDataCommon->QuestIndicatorData;
+	if (!QuestIndicatorData) return false;
+
+	const FFortChallengeMapPoiData* FoundPoiData = nullptr;
+	for (const FFortChallengeMapPoiData& PoiData : QuestIndicatorData->ChallengeMapPoiData)
+	{
+		if (PoiData.LocationTag.TagName.IsValid() && __this->LocationTags.HasTag(PoiData.LocationTag))
+		{
+			// If it has no calendar requirements, we found the perfect match, stop looking.
+			if (PoiData.CalendarEventsRequired.Num() == 0)
+			{
+				FoundPoiData = &PoiData;
+				break;
+			}
+			if (!FoundPoiData)
+			{
+				FoundPoiData = &PoiData;
+			}
+		}
+	}
+
+	if (!FoundPoiData) return false;
+
+	FVector MapLocationTextLocationOffset = FVector(0, 0, 0);
+	if (const UFortPoi_DiscoverableComponent* DiscoverableComponent = (UFortPoi_DiscoverableComponent*)__this->GetComponentByClass(UFortPoi_DiscoverableComponent::StaticClass()))
+	{
+		MapLocationTextLocationOffset = DiscoverableComponent->MapLocationTextLocationOffset;
+	}
+
+	OutLocation = FVector(FoundPoiData->WorldLocation.X - MapLocationTextLocationOffset.X, FoundPoiData->WorldLocation.Y - MapLocationTextLocationOffset.Y, FoundPoiData->WorldLocation.Z - MapLocationTextLocationOffset.Z);
+	return true;
+}
+
+bool GetBrushBounds(AFortPoiVolume* __this, FVector& OutLocalOrigin, FVector& OutExtent)
+{
+	if (!__this->Brush) return false;
+
+	const FBoxSphereBounds& BrushBounds = *reinterpret_cast<FBoxSphereBounds*>(__int64(__this->Brush) + 0x23C);
+	if (BrushBounds.BoxExtent.X <= 0.f || BrushBounds.BoxExtent.Y <= 0.f || BrushBounds.BoxExtent.Z <= 0.f)
+	{
+		return false;
+	}
+
+	OutLocalOrigin = BrushBounds.Origin;
+	OutExtent = BrushBounds.BoxExtent;
+	return true;
+}
+
+bool GetLocationBoundsFromBuildingFoundations(AFortPoiVolume* __this, FVector& OutOrigin, FVector& OutExtent, int32& OutFoundationCount)
+{
+	OutFoundationCount = 0;
+
+	UWorld* World = GetWorld();
+	if (!World) return false;
+
+	FVector Min = FVector(0, 0, 0);
+	FVector Max = FVector(0, 0, 0);
+	bool bInitialized = false;
+
+	const TArray<AActor*>& BuildingFoundations = GetBuildingFoundations(World);
+	printf("BuildingFoundatons: %d\n", BuildingFoundations.Num());
+	for (AActor* Actor : BuildingFoundations)
+	{
+		ABuildingFoundation* BuildingFoundation = Util::Cast<ABuildingFoundation>(Actor);
+		if (!BuildingFoundation || !BuildingFoundation->MapLocationTag.TagName.IsValid() || !__this->LocationTags.HasTag(BuildingFoundation->MapLocationTag))
+		{
+			continue;
+		}
+
+		if (BuildingFoundation->StreamingBoundingBox.IsValid)
+		{
+			const FTransform FoundationTransform = BuildingFoundation->GetTransform();
+			const FVector& BoxMin = BuildingFoundation->StreamingBoundingBox.Min;
+			const FVector& BoxMax = BuildingFoundation->StreamingBoundingBox.Max;
+			for (int32 CornerIndex = 0; CornerIndex < 8; ++CornerIndex)
+			{
+				const FVector LocalCorner(
+					(CornerIndex & 1) ? BoxMax.X : BoxMin.X,
+					(CornerIndex & 2) ? BoxMax.Y : BoxMin.Y,
+					(CornerIndex & 4) ? BoxMax.Z : BoxMin.Z
+				);
+
+				FVector WorldCorner = UKismetMathLibrary::TransformLocation(FoundationTransform, LocalCorner);
+				AddPointToBoundsKismet(Min, Max, WorldCorner, bInitialized);
+			}
+		}
+		else
+		{
+			FVector FoundationOrigin, FoundationExtent;
+
+			BuildingFoundation->GetActorBounds(false, &FoundationOrigin, &FoundationExtent, true);
+
+			AddPointToBoundsKismet(Min, Max, FVector(FoundationOrigin.X - FoundationExtent.X, FoundationOrigin.Y - FoundationExtent.Y, FoundationOrigin.Z - FoundationExtent.Z), bInitialized);
+			AddPointToBoundsKismet(Min, Max, FVector(FoundationOrigin.X + FoundationExtent.X, FoundationOrigin.Y + FoundationExtent.Y, FoundationOrigin.Z + FoundationExtent.Z), bInitialized);
+		}
+		++OutFoundationCount;
+	}
+
+	if (OutFoundationCount == 0 || !bInitialized) return false;
+
+	OutOrigin = FVector((Min.X + Max.X) * 0.5f, (Min.Y + Max.Y) * 0.5f, 0.f);
+	OutExtent = FVector((Max.X - Min.X) * 0.5f, (Max.Y - Min.Y) * 0.5f, PoiVolumeHalfHeight);
+	return true;
+}
+
+inline void (*PostInitComponentsOriginal)(AFortPoiVolume*);
+void PostInitializeComponents(AFortPoiVolume* __this)
+{
+	printf(__FUNCTION__"\n");
+	if (__this)
+	{
+		printf(__FUNCTION__"\n");
+		FVector Location = FVector(0, 0, 0);
+		FVector LocalOrigin = FVector(0, 0, 0);
+		FVector Extent = FVector(0, 0, 0);
+		int32 FoundationCount = 0;
+
+		if (GetLocationFromChallengeMapPoiData(__this, Location) && GetBrushBounds(__this, LocalOrigin, Extent))
+		{
+		}
+		else if (!GetLocationBoundsFromBuildingFoundations(__this, Location, Extent, FoundationCount))
+		{
+			printf("FoundationCount: %d\n", FoundationCount);
+			return PostInitComponentsOriginal(__this);
+		}
+		FTransform Xf{};
+		Xf.Translation = Location;
+		Xf.Rotation = FQuat(0, 0, 0, 1);
+		printf("XF: %f,%f,%f\n", Xf.Translation.X, Xf.Translation.Y, Xf.Translation.Z);
+		Xf.Scale3D = FVector(1, 1, 1);
+
+		UBrushComponent* BC = (UBrushComponent*)UGameplayStatics::SpawnObject(UBrushComponent::StaticClass(), __this);
+		__this->BrushComponent = BC;
+		__this->RootComponent = BC;
+
+		UBoxComponent* BoxComponent = (UBoxComponent*)UGameplayStatics::SpawnObject(UBoxComponent::StaticClass(), BC);
+		if (!BoxComponent) return PostInitComponentsOriginal(__this);
+
+		BoxComponent->SetBoxExtent(Extent, false);
+
+		BC->Brush = __this->Brush;
+		BC->BrushBodySetup = BoxComponent->ShapeBodySetup;
+		UBodySetup* BrushBodySetup = BC->BrushBodySetup;
+		if (BrushBodySetup && BrushBodySetup->AggGeom.BoxElems.Num() > 0)
+		{
+			BrushBodySetup->AggGeom.BoxElems[0].Center = LocalOrigin;
+		}
+		BC->SetCollisionProfileName(UKismetStringLibrary::Conv_StringToName(L"NoCollision"), false);
+		BC->SetGenerateOverlapEvents(false);
+		BC->K2_SetWorldTransform(Xf, false, nullptr, true);
+		BC->SetMobility(EComponentMobility::Static);
+		static void (*RegisterComponent)(void*) = decltype(RegisterComponent)(InSDKUtils::GetImageBase() + 0xd7fccc);
+		RegisterComponent(BC);
+		void (*UpdateComponentToWorld)(void*, uint8, uint8) = decltype(UpdateComponentToWorld)(BC->VTable[(0x3B8 / 8)]);
+		UpdateComponentToWorld(BC, 0, 0);
+		FBoxSphereBounds Bounds{};
+		Bounds.Origin = FVector(Location.X + LocalOrigin.X, Location.Y + LocalOrigin.Y, Location.Z + LocalOrigin.Z);
+		Bounds.BoxExtent = Extent;
+		Bounds.SphereRadius = sqrtf(Extent.X * Extent.X + Extent.Y * Extent.Y + Extent.Z * Extent.Z);
+		*reinterpret_cast<FBoxSphereBounds*>(__int64(BC) + 0x100) = Bounds;
+
+		UFortPoiCollisionComponent* C = __this->PoiCollisionComp;
+
+		C->K2_AttachToComponent(BC, UKismetStringLibrary::Conv_StringToName(L"None"), EAttachmentRule::SnapToTarget, EAttachmentRule::SnapToTarget, EAttachmentRule::KeepWorld, false);
+	}
+
+	return PostInitComponentsOriginal(__this);
+}
+
+inline AFortAthenaAIBotController* (*GetSquadLeaderOG)(AFortAthenaAIBotController* __this);
+AFortAthenaAIBotController* GetSquadLeader(AFortAthenaAIBotController* __this)
+{
+	AFortAthenaAIBotController* SquadLeader = GetSquadLeaderOG(__this);
+
+	if (SquadLeader == NULL)
+		SquadLeader = __this;
+
+	printf("SquadLeader: %s\n", SquadLeader->GetName().c_str());
+	return SquadLeader;
 }

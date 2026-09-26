@@ -59,7 +59,7 @@ DWORD WINAPI Main(LPVOID)
     Util::FHook("AFortGameModeAthena::ReadyToStartMatch", Addresses::ReadyToStartMatch, ReadyToStartMatch);
     Util::FHook("AFortGameModeAthena::SpawnDefaultPawnFor", Addresses::SpawnDefaultPawnFor, SpawnDefaultPawnFor);
     Util::FHook("AFortGameModeAthena::StartNewSafeZonePhase", Addresses::StartNewSafeZonePhase, StartNewSafeZonePhase, DEFINE_OG(StartNewSafeZonePhaseOG));
-    //Util::FHook("AFortGameModeAthena::StartAircraftPhase", uint64_t(0x5FA4538), StartAircraftPhase, DEFINE_OG(StartAircraftPhaseOG));
+    Util::FHook("AFortGameModeAthena::StartAircraftPhase", uint64_t(0x5FA4538), StartAircraftPhase, DEFINE_OG(StartAircraftPhaseOG));
 
     if (bUsesGameSessions) {
         Util::FHook<AFortGameModeAthena>("AFortGameModeAthena::GetGameSessionClass", Addresses::GetGameSessionClassVFT, GetGameSessionClass);
@@ -164,7 +164,14 @@ DWORD WINAPI Main(LPVOID)
 
 	Util::FHook("ABuildingActor::OnDamageServer", uint64_t(0x69E3008), OnDamageServer, DEFINE_OG(OnDamageServerOG));
 
+    MH_CreateHook(LPVOID((InSDKUtils::GetImageBase() + 0xB6A380)), PostInitializeComponents, (void**)&PostInitComponentsOriginal);
+    MH_EnableHook(LPVOID((InSDKUtils::GetImageBase() + 0xB6A380)));
+
+    Util::FHook("BS", uint64_t(0x5CE75A8), GetSquadLeader, (void**)&GetSquadLeaderOG);
+
     //Util::FHook<AFortPlayerControllerAthena>("AFortPlayerControllerAthena::ServerClientIsReadyToRespawn", uint32_t(0x553), ServerClientIsReadyToRespawn);
+
+    *reinterpret_cast<int*>(InSDKUtils::GetImageBase() + 0xB5D6038) = 1;
 
     FString MapName = bCreative ? L"open Creative_NoApollo_Terrain" : L"open Artemis_Terrain";
 
@@ -194,7 +201,7 @@ DWORD WINAPI Main(LPVOID)
         UKismetSystemLibrary::ExecuteConsoleCommand(GetWorld(), L"log LogFortAI Verbose");
         UKismetSystemLibrary::ExecuteConsoleCommand(GetWorld(), L"log LogFortAbility Verbose");
         UKismetSystemLibrary::ExecuteConsoleCommand(GetWorld(), L"log LogAIPerception Verbose");
-        //UKismetSystemLibrary::ExecuteConsoleCommand(GetWorld(), L"log logAthenaBots Verbose");
+        UKismetSystemLibrary::ExecuteConsoleCommand(GetWorld(), L"log logAthenaBots all");
         //UKismetSystemLibrary::ExecuteConsoleCommand(GetWorld(), L"log lognavigation verbose");
         UKismetSystemLibrary::ExecuteConsoleCommand(GetWorld(), L"log LogCharacter verbose");
         UKismetSystemLibrary::ExecuteConsoleCommand(GetWorld(), L"log LogBehaviorTree Verbose");
